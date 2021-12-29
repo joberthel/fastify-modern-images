@@ -1,0 +1,19 @@
+{
+    "cache": false,
+    "check-coverage": true,
+    "extension": [
+        ".ts"
+    ],
+    "include": [
+        "src/**/*.ts"
+    ],
+    "sourceMap": true,
+    "reporter": [
+        "lcov",
+        "text"
+    ],
+    "statements": 90,
+    "branches": 90,
+    "functions": 95,
+    "lines": 90
+}

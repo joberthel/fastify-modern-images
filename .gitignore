@@ -1,0 +1,7 @@
+test-results.xml
+
+dist/
+build/
+coverage/
+.nyc_output/
+node_modules/
