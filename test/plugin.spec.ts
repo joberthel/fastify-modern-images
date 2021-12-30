@@ -37,7 +37,7 @@ describe('plugin', () => {
     before(async () => {
         server = fastify();
 
-        server.register(fastifyModernImages, {});
+        server.register(fastifyModernImages);
         server.register(fastifyStatic, { root: path.join(__dirname, '../example/public'), prefix: '/' });
 
         server.get('/buffer.jpg', async (request, reply) => {

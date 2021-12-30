@@ -20,11 +20,13 @@
   "dependencies": {
     "fastify": "^3.25.3",
     "fastify-plugin": "^3.0.0",
+    "lodash": "^4.17.21",
     "sharp": "^0.29.3"
   },
   "devDependencies": {
     "@types/chai": "^4.3.0",
     "@types/chai-as-promised": "^7.1.4",
+    "@types/lodash": "^4.14.178",
     "@types/mocha": "^9.0.0",
     "@types/node": "^17.0.5",
     "@types/sharp": "^0.29.5",

@@ -6,7 +6,8 @@
         "pretty": true,
         "declaration": true,
         "strict": true,
-        "noImplicitAny": true
+        "noImplicitAny": true,
+        "esModuleInterop": true
     },
     "include": ["src/*"],
     "exclude": []

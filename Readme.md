@@ -1,0 +1,1 @@
+# fastify-modern-images [![CircleCI](https://img.shields.io/circleci/build/github/joberthel/fastify-modern-images/main)](https://circleci.com/gh/joberthel/fastify-modern-images/tree/main) [![codecov](https://img.shields.io/codecov/c/gh/joberthel/fastify-modern-images?token=JSAR7F2AIF)](https://codecov.io/gh/joberthel/fastify-modern-images)
