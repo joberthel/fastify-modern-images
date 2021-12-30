@@ -35,6 +35,21 @@ jobs:
       - store_artifacts:
           path: ./coverage/lcov-report
 
+  publish:
+    docker:
+      - image: cimg/node:14.18
+    steps:
+      - attach_workspace:
+          at: .
+      - run: |
+          export COMMIT_MESSAGE="$(git log --format=oneline -n 1 $CIRCLE_SHA1)"
+          if [[ $COMMIT_MESSAGE == *"[skip npm]"* ]]; then
+            echo "Skipping npm publish."
+          else
+            echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > .npmrc
+            npm publish
+          fi
+
 workflows:
   build_and_test:
     jobs:
@@ -42,6 +57,14 @@ workflows:
       - test:
           requires:
             - build
+      - publish:
+          context: npm
+          requires:
+            - test
+          filters:
+            branches:
+              only:
+                - main
 
   test_nightly:
     triggers:
