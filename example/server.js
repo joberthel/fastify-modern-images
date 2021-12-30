@@ -9,7 +9,9 @@ fastify
         root: path.join(__dirname, 'public'),
         prefix: '/'
     })
-    .register(require('../dist'), {})
+    .register(require('../dist'), { regex: /\/test\.jpg/, quality: 7 })
+    .register(require('../dist'), { regex: /\/test\.png/, quality: 1 })
+    .register(require('../dist'), { regex: /\/test\-alpha\.png/, quality: 7 })
     .get('/buffer_moscow_metro.jpg', async (request, reply) => {
         const buffer = await fs.readFile(path.join(__dirname, 'public', 'moscow_metro.jpg'));
         reply.header('Content-Type', 'image/jpeg').send(buffer);
