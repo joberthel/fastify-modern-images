@@ -136,13 +136,23 @@ export async function fastifyModernImages(fastify: FastifyInstance, opts: Fastif
         const format = getBestFormat(request.headers.accept, metadata, Object.values(options.compression as any));
 
         if (format == false) {
+            request.log.warn(`No adequate format for image of type "${reply.getHeader('Content-Type')}" was found.`);
             return payload;
         }
 
+        // @ts-expect-error
+        const quality = format.quality[options.quality];
+        const output = await instance.toFormat(format.format as any, merge(format.options, { quality })).toBuffer();
+
+        request.log.info(
+            `Input: ${reply.getHeader('Content-Type')}, Output: ${format.contentType}, Quality: ${quality}, Reduction: ${Math.round(
+                (1 - output.length / (payload as Buffer).length) * 100
+            )}%)`
+        );
+
         reply.header('Content-Type', format.contentType);
 
-        // @ts-expect-error
-        return instance.toFormat(format.format as any, merge(format.options, { quality: format.quality[options.quality] })).toBuffer();
+        return output;
     });
 }
 
