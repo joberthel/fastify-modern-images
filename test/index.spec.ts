@@ -72,6 +72,13 @@ describe('default behaviour', () => {
     it('should work with buffer', async () => {
         expect(await fetch('/buffer.jpg', 'image/avif,image/webp')).to.eq('image/avif');
     });
+
+    it('should return jpeg with transformation', async () => {
+        expect(await fetch('/test.jpg?width=150')).to.eq('image/jpeg');
+        expect(await fetch('/test.jpg?height=150')).to.eq('image/jpeg');
+        expect(await fetch('/test.jpg?width=150&height=150&fit=contain')).to.eq('image/jpeg');
+        expect(await fetch('/test.jpg?width=150&height=150&position=left')).to.eq('image/jpeg');
+    });
 });
 
 describe('passthrough behaviour', () => {

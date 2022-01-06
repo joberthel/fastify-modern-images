@@ -1,6 +1,6 @@
 import { Stream } from 'stream';
 import { Metadata } from 'sharp';
-import { FastifyModernImagesOptionsCompression } from '.';
+import { FastifyModernImagesOptionsCompression } from './types';
 
 export async function stream2buffer(stream: Stream): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {

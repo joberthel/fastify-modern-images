@@ -2,29 +2,9 @@ import sharp from 'sharp';
 import fp from 'fastify-plugin';
 import { Stream } from 'stream';
 import merge from 'lodash/merge';
+import { FastifyInstance, FastifyRequest } from 'fastify';
+import { FastifyModernImagesOptions, MinifyRequest } from './types';
 import { getBestFormat, guard, stream2buffer, validatePayload } from './utils';
-import { FastifyInstance } from 'fastify';
-
-const imageFormats = <const>['avif', 'webp', 'jpeg', 'png'];
-
-export type ImageFormat = typeof imageFormats[number];
-
-export type FastifyModernImagesOptions = {
-    regex?: RegExp;
-    quality?: string;
-    compression?: Record<string, FastifyModernImagesOptionsCompression>;
-};
-
-export type FastifyModernImagesOptionsCompression = {
-    enabled?: boolean;
-    format?: ImageFormat;
-    priority?: number;
-    alpha?: boolean;
-    quality?: Record<string, number>;
-    options?: Record<string, any>;
-    contentType?: string;
-    supported?: (accept: string) => boolean;
-};
 
 const defaults: FastifyModernImagesOptions = {
     regex: /.*/,
@@ -115,13 +95,13 @@ const defaults: FastifyModernImagesOptions = {
     }
 };
 
-export async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModernImagesOptions) {
+async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModernImagesOptions) {
     const options: FastifyModernImagesOptions = merge(defaults, opts);
 
     // @ts-expect-error
     const contentTypes: string[] = Object.values(options.compression).map(item => item.contentType);
 
-    fastify.addHook('onSend', async (request, reply, payload) => {
+    fastify.addHook('onSend', async (request: FastifyRequest<MinifyRequest>, reply, payload) => {
         if (!guard(options.regex as RegExp, request.raw.url) || !validatePayload(reply.getHeader('Content-Type'), contentTypes, payload)) {
             return payload;
         }
@@ -141,7 +121,15 @@ export async function fastifyModernImages(fastify: FastifyInstance, opts: Fastif
         }
 
         // @ts-expect-error
-        const quality = format.quality[options.quality];
+        const quality = format.quality[request.query.quality || options.quality];
+
+        if (request.query.width || request.query.height) {
+            instance.resize(parseInt(request.query.width || '') || null, parseInt(request.query.height || '') || null, {
+                fit: request.query.fit || 'cover',
+                position: request.query.position || 'centre'
+            });
+        }
+
         const output = await instance.toFormat(format.format as any, merge(format.options, { quality })).toBuffer();
 
         request.log.info(
