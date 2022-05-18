@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import { expect } from 'chai';
 import fastifyModernImages from '../src';
-import fastifyStatic from 'fastify-static';
+import fastifyStatic from '@fastify/static';
 
 import fastify, { FastifyInstance } from 'fastify';
 

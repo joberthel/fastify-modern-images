@@ -22,7 +22,7 @@ const path = require('path');
 const fastify = require('fastify')({ logger: { level: 'trace' } });
 
 fastify
-    .register(require('fastify-static'), {
+    .register(require('@fastify/static'), {
         root: path.join(__dirname, 'public'),
         prefix: '/'
     })
