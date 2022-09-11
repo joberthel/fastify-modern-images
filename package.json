@@ -1,6 +1,6 @@
 {
   "name": "fastify-modern-images",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Fastify plugin, which converts images automatically into modern formats.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -41,12 +41,5 @@
     "tsc-watch": "^5.0.3",
     "typescript": "^4.6.4"
   },
-  "keywords": [
-    "fastify",
-    "webp",
-    "avif",
-    "jpeg",
-    "png",
-    "image tranformation"
-  ]
+  "keywords": ["fastify", "webp", "avif", "jpeg", "png", "image tranformation"]
 }
