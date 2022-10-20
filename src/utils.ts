@@ -16,8 +16,12 @@ export function guard(regex: RegExp, path: string = '/'): boolean {
     return regex.test(path);
 }
 
-export function validatePayload(contentType: string = '', validContentTypes: string[], payload: unknown): boolean {
-    return validContentTypes.includes(contentType) && (payload instanceof Stream || payload instanceof Buffer);
+export function validatePayload(contentType: string | string[] | number = '', validContentTypes: string[], payload: unknown): boolean {
+    if (Array.isArray(contentType) || typeof contentType === 'number') {
+        return false;
+    }
+
+    return validContentTypes.includes(contentType) && (isStream(payload) || Buffer.isBuffer(payload));
 }
 
 export function getBestFormat(accept: string = '', metadata: Metadata, formats: FastifyModernImagesOptionsCompression[]): FastifyModernImagesOptionsCompression | false {
@@ -29,4 +33,8 @@ export function getBestFormat(accept: string = '', metadata: Metadata, formats: 
     }
 
     return false;
+}
+
+export function isStream(stream: any) {
+    return stream !== null && typeof stream === 'object' && typeof stream.pipe === 'function';
 }

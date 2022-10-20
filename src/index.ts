@@ -4,7 +4,7 @@ import { Stream } from 'stream';
 import merge from 'lodash/merge';
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { FastifyModernImagesOptions, MinifyRequest } from './types';
-import { getBestFormat, guard, stream2buffer, validatePayload } from './utils';
+import { getBestFormat, guard, isStream, stream2buffer, validatePayload } from './utils';
 
 const defaults: FastifyModernImagesOptions = {
     regex: /.*/,
@@ -106,8 +106,8 @@ async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModern
             return payload;
         }
 
-        if (payload instanceof Stream) {
-            payload = await stream2buffer(payload);
+        if (isStream(payload)) {
+            payload = await stream2buffer(payload as Stream);
         }
 
         const instance = sharp(payload as Buffer);
@@ -115,7 +115,7 @@ async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModern
 
         const format = getBestFormat(request.headers.accept, metadata, Object.values(options.compression as any));
 
-        if (format == false) {
+        if (!format) {
             request.log.warn(`No adequate format for image of type "${reply.getHeader('Content-Type')}" was found.`);
             return payload;
         }
@@ -139,12 +139,13 @@ async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModern
         );
 
         reply.header('Content-Type', format.contentType);
+        reply.header('Content-Length', output.length);
 
         return output;
     });
 }
 
 export default fp(fastifyModernImages, {
-    fastify: '3.x',
+    fastify: '4.x',
     name: 'fastify-modern-images'
 });

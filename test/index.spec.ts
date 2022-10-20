@@ -20,7 +20,7 @@ async function fetch(path, accept = ''): Promise<string> {
                 }
             },
             res => {
-                resolve(res.headers['content-type']);
+                resolve(res.headers['content-type'] || '');
             }
         );
 
@@ -43,10 +43,10 @@ describe('default behaviour', () => {
 
         server.get('/buffer.jpg', async (request, reply) => {
             const buffer = await fs.readFile(path.join(__dirname, '../example/public/test.jpg'));
-            reply.header('Content-Type', 'image/jpeg').send(buffer);
+            return reply.header('Content-Type', 'image/jpeg').send(buffer);
         });
 
-        await server.listen(4567);
+        await server.listen({ port: 4567 });
     });
 
     after(async () => {
@@ -97,7 +97,7 @@ describe('passthrough behaviour', () => {
         });
         server.register(fastifyStatic, { root: path.join(__dirname, '../example/public'), prefix: '/' });
 
-        await server.listen(4567);
+        await server.listen({ port: 4567 });
     });
 
     after(async () => {
@@ -118,7 +118,7 @@ describe('guard behaviour', () => {
         server.register(fastifyModernImages, { regex: /\/test\.jpg/ });
         server.register(fastifyStatic, { root: path.join(__dirname, '../example/public'), prefix: '/' });
 
-        await server.listen(4567);
+        await server.listen({ port: 4567 });
     });
 
     after(async () => {

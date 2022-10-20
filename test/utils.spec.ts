@@ -1,7 +1,7 @@
 import chai from 'chai';
-import { PassThrough } from 'stream';
+import { PassThrough, Stream, Readable, Writable } from 'stream';
 import chaiAsPromised from 'chai-as-promised';
-import { getBestFormat, guard, stream2buffer, validatePayload } from '../src/utils';
+import { getBestFormat, guard, isStream, stream2buffer, validatePayload } from '../src/utils';
 
 chai.use(chaiAsPromised);
 
@@ -54,5 +54,11 @@ describe('utils', () => {
         ];
 
         expect(getBestFormat('image/avif', { hasAlpha: false } as any, formats as any) as any).to.be.false;
+    });
+
+    it('should check if stream', () => {
+        expect(isStream(new Stream())).to.be.true;
+        expect(isStream(Buffer.from(''))).to.be.false;
+        expect(isStream('')).to.be.false;
     });
 });

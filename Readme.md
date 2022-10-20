@@ -2,6 +2,11 @@
 
 This fastify plugin will automatically transform your images to modern formats like `avif` or `webp`.
 
+## Compatibility
+
+-  Version 0.1.x is compatible with fastify 3.x
+-  Version 0.2.x is compatible with fastify 4.x
+
 ## Features
 
 -   supports `avif`, `webp`, `jpeg` and `png`
@@ -27,7 +32,7 @@ fastify
         prefix: '/'
     })
     .register(require('fastify-modern-images'), { quality: 7 })
-    .listen(3000, err => {
+    .listen({ port: 3000 }, err => {
         if (err) throw err;
     });
 ```

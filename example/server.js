@@ -9,6 +9,6 @@ fastify
         prefix: '/'
     })
     .register(require('../dist'), { quality: 7 })
-    .listen(3000, err => {
+    .listen({ port: 3000 }, err => {
         if (err) throw err;
     });
