@@ -35,6 +35,9 @@ describe('utils', () => {
         expect(validatePayload('image/jpeg', ['image/jpeg', 'image/png'], 'foo bar')).to.be.false;
         expect(validatePayload('image/avif', ['image/jpeg', 'image/png'], 'foo bar')).to.be.false;
         expect(validatePayload(undefined, ['image/jpeg', 'image/png'], 'foo bar')).to.be.false;
+
+        expect(validatePayload([], ['foo'], 'bar')).to.be.false;
+        expect(validatePayload(42, ['foo'], 'bar')).to.be.false;
     });
 
     it('should select best format', () => {
