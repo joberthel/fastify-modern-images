@@ -81,6 +81,31 @@ describe('default behaviour', () => {
     });
 });
 
+describe('guard behaviour', () => {
+    let server: FastifyInstance;
+
+    before(async () => {
+        server = fastify();
+
+        server.register(fastifyModernImages, { regex: /^[^?]+$/ });
+        server.register(fastifyStatic, { root: path.join(__dirname, '../example/public'), prefix: '/' });
+
+        await server.listen({ port: 4567 });
+    });
+
+    after(async () => {
+        await server.close();
+    });
+
+    it('should return avif', async () => {
+        expect(await fetch('/test.jpg?foo', 'image/avif,image/webp')).to.eq('image/jpeg');
+    });
+
+    it('should return png', async () => {
+        expect(await fetch('/test.png?foo', 'image/avif,image/webp')).to.eq('image/png');
+    });
+});
+
 describe('passthrough behaviour', () => {
     let server: FastifyInstance;
 
@@ -106,26 +131,5 @@ describe('passthrough behaviour', () => {
 
     it('should return jpeg', async () => {
         expect(await fetch('/test.jpg', 'image/avif,image/webp')).to.eq('image/jpeg');
-    });
-});
-
-describe('guard behaviour', () => {
-    let server: FastifyInstance;
-
-    before(async () => {
-        server = fastify();
-
-        server.register(fastifyModernImages, { regex: /\/test\.jpg/ });
-        server.register(fastifyStatic, { root: path.join(__dirname, '../example/public'), prefix: '/' });
-
-        await server.listen({ port: 4567 });
-    });
-
-    after(async () => {
-        await server.close();
-    });
-
-    it('should return jpeg', async () => {
-        expect(await fetch('/test.png', 'image/avif,image/webp')).to.eq('image/png');
     });
 });
