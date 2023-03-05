@@ -47,7 +47,7 @@ const defaults: FastifyModernImagesOptions = {
                 '1': 34
             },
             options: {
-                speed: 7
+                effort: 3
             },
             contentType: 'image/avif',
             supported: accept => accept.includes('image/avif')
@@ -120,13 +120,19 @@ async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModern
             return payload;
         }
 
-        // @ts-expect-error
-        const quality = format.quality[request.query.quality || options.quality];
+        const uQuality = request.query.quality || request.query.q || options.quality;
 
-        if (request.query.width || request.query.height) {
-            instance.resize(parseInt(request.query.width || '') || null, parseInt(request.query.height || '') || null, {
-                fit: request.query.fit || 'cover',
-                position: request.query.position || 'centre'
+        // @ts-expect-error
+        const quality = format.quality[uQuality];
+
+        const uWidth = request.query.width || request.query.w;
+        const uHeight = request.query.height || request.query.h;
+
+        if (uWidth || uHeight) {
+            instance.resize(parseInt(uWidth || '') || null, parseInt(uHeight || '') || null, {
+                fit: request.query.fit || request.query.f || 'cover',
+                position: request.query.position || request.query.p || 'centre',
+                background: request.query.background || request.query.b
             });
         }
 

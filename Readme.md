@@ -4,8 +4,8 @@ This fastify plugin will automatically transform your images to modern formats l
 
 ## Compatibility
 
--  Version 0.1.x is compatible with fastify 3.x
--  Version 0.2.x is compatible with fastify 4.x
+-   Version 0.1.x is compatible with fastify 3.x
+-   Version 0.2.x is compatible with fastify 4.x
 
 ## Features
 
@@ -74,8 +74,18 @@ You can add query parameters to the url to resize your images on the fly. Here a
 http://localhost:3000/test.jpg?width=150
 http://localhost:3000/test.jpg?height=150
 http://localhost:3000/test.jpg?width=150&height=200
-http://localhost:3000/test.jpg?width=150&height=200&fit=contain
+http://localhost:3000/test.jpg?width=150&height=200&fit=contain&background=red
 http://localhost:3000/test.jpg?width=150&height=200&position=bottom
+```
+
+You can also use short versions of the parameters.
+
+```
+http://localhost:3000/test.jpg?w=150
+http://localhost:3000/test.jpg?h=150
+http://localhost:3000/test.jpg?w=150&h=200
+http://localhost:3000/test.jpg?w=150&h=200&f=contain&b=red
+http://localhost:3000/test.jpg?w=150&h=200&p=bottom
 ```
 
 Have a look at the [sharp documentation](https://sharp.pixelplumbing.com/api-resize#resize) for all available options.
@@ -84,4 +94,5 @@ You can also set the quality via a query parameter:
 
 ```
 http://localhost:3000/test.jpg?quality=9
+http://localhost:3000/test.jpg?q=2
 ```

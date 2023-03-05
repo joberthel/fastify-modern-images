@@ -24,6 +24,14 @@ export type MinifyQuerystring = {
         | 'centre'
         | 'entropy'
         | 'attention';
+    background?: string;
+    /** Shortcuts */
+    q: MinifyQuerystring['quality'];
+    w: MinifyQuerystring['width'];
+    h: MinifyQuerystring['height'];
+    f: MinifyQuerystring['fit'];
+    p: MinifyQuerystring['position'];
+    b: MinifyQuerystring['background'];
 };
 
 export type MinifyRequest = {
