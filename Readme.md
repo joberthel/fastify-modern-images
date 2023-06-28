@@ -4,8 +4,8 @@ This fastify plugin will automatically transform your images to modern formats l
 
 ## Compatibility
 
--   Version 0.1.x is compatible with fastify 3.x
--   Version 0.2.x is compatible with fastify 4.x
+-   Versions 0.2.x and above are compatible with fastify 4.x
+-   For fastify 3.x use version 0.1.x of this plugin
 
 ## Features
 
