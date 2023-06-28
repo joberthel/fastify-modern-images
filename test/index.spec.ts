@@ -79,6 +79,25 @@ describe('default behaviour', () => {
         expect(await fetch('/test.jpg?width=150&height=150&fit=contain')).to.eq('image/jpeg');
         expect(await fetch('/test.jpg?width=150&height=150&position=left')).to.eq('image/jpeg');
     });
+
+    it('should return jpeg with transformation and background', async () => {
+        expect(await fetch('/test.jpg?width=800&height=200&fit=contain&background=white')).to.eq('image/jpeg');
+    });
+
+    it('should return jpeg with rotation', async () => {
+        expect(await fetch('/test.jpg?rotation=45')).to.eq('image/jpeg');
+        expect(await fetch('/test.jpg?r=45')).to.eq('image/jpeg');
+    });
+
+    it('should return jpeg with rotation and background', async () => {
+        expect(await fetch('/test.jpg?rotation=45&background=white')).to.eq('image/jpeg');
+        expect(await fetch('/test.jpg?r=45&bg=white')).to.eq('image/jpeg');
+    });
+
+    it('should return jpeg with different quality', async () => {
+        expect(await fetch('/test.jpg?quality=3')).to.eq('image/jpeg');
+        expect(await fetch('/test.jpg?q=3')).to.eq('image/jpeg');
+    });
 });
 
 describe('guard behaviour', () => {
