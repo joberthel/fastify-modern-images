@@ -25,6 +25,7 @@ export type MinifyQuerystring = {
         | 'entropy'
         | 'attention';
     background?: string;
+    rotation?: string;
     /** Shortcuts */
     q: MinifyQuerystring['quality'];
     w: MinifyQuerystring['width'];
@@ -32,6 +33,7 @@ export type MinifyQuerystring = {
     f: MinifyQuerystring['fit'];
     p: MinifyQuerystring['position'];
     b: MinifyQuerystring['background'];
+    r: MinifyQuerystring['rotation'];
 };
 
 export type MinifyRequest = {
@@ -40,7 +42,7 @@ export type MinifyRequest = {
 
 const imageFormats = <const>['avif', 'webp', 'jpeg', 'png'];
 
-export type ImageFormat = typeof imageFormats[number];
+export type ImageFormat = (typeof imageFormats)[number];
 
 export type FastifyModernImagesOptions = {
     regex?: RegExp;

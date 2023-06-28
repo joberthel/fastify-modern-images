@@ -1,7 +1,7 @@
 'use strict';
 
 const path = require('path');
-const fastify = require('fastify')({ logger: { level: 'trace' } });
+const fastify = require('fastify')({ logger: { level: 'info' } });
 
 fastify
     .register(require('@fastify/static'), {

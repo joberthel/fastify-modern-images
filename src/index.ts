@@ -120,21 +120,25 @@ async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModern
             return payload;
         }
 
-        const uQuality = request.query.quality || request.query.q || options.quality;
+        const rotation = request.query.rotation ?? request.query.r;
+        instance.rotate(rotation ? parseInt(rotation) : undefined, {
+            background: request.query.background ?? request.query.b
+        });
 
-        // @ts-expect-error
-        const quality = format.quality[uQuality];
-
-        const uWidth = request.query.width || request.query.w;
-        const uHeight = request.query.height || request.query.h;
+        const uWidth = request.query.width ?? request.query.w;
+        const uHeight = request.query.height ?? request.query.h;
 
         if (uWidth || uHeight) {
-            instance.resize(parseInt(uWidth || '') || null, parseInt(uHeight || '') || null, {
-                fit: request.query.fit || request.query.f || 'cover',
-                position: request.query.position || request.query.p || 'centre',
-                background: request.query.background || request.query.b
+            instance.resize(parseInt(uWidth ?? '') || null, parseInt(uHeight ?? '') || null, {
+                fit: request.query.fit ?? request.query.f ?? 'cover',
+                position: request.query.position ?? request.query.p ?? 'centre',
+                background: request.query.background ?? request.query.b
             });
         }
+
+        const uQuality = request.query.quality ?? request.query.q ?? options.quality;
+        // @ts-expect-error
+        const quality = format.quality[uQuality];
 
         const output = await instance.toFormat(format.format as any, merge(format.options, { quality })).toBuffer();
 
