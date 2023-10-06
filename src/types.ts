@@ -26,6 +26,7 @@ export type MinifyQuerystring = {
         | 'attention';
     background?: string;
     rotation?: string;
+    ai?: null;
     /** Shortcuts */
     q: MinifyQuerystring['quality'];
     w: MinifyQuerystring['width'];
@@ -47,6 +48,9 @@ export type ImageFormat = (typeof imageFormats)[number];
 export type FastifyModernImagesOptions = {
     regex?: RegExp;
     quality?: string;
+    rembg?: {
+        model?: string;
+    };
     compression?: Record<string, FastifyModernImagesOptionsCompression>;
 };
 

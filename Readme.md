@@ -43,6 +43,9 @@ fastify
 {
     regex: /.*/, // If it is set will check this regex against the request path. Will only apply plugin if it is true.
     quality: '7', // Sets the default quality from '1' (worst), '2', ... '9' (best).
+    rembg: {
+        modal: 'u2netp' // https://github.com/danielgatis/rembg#models
+    },
     compression: {
         avif: {
             enabled: true, // Define if this format should be used.
@@ -97,4 +100,19 @@ You can also set the quality via a query parameter:
 ```
 http://localhost:3000/test.jpg?quality=9
 http://localhost:3000/test.jpg?q=2
+```
+
+# AI Background Removal
+
+Make sure python and [rembg](https://github.com/danielgatis/rembg) is installed.
+
+```
+pip install rembg[cli]
+```
+
+Examples:
+
+```
+http://localhost:3000/product.jpeg?ai
+http://localhost:3000/product.jpeg?ai&background=red
 ```

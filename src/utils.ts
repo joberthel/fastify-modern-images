@@ -1,6 +1,7 @@
 import { Stream } from 'stream';
 import { Metadata } from 'sharp';
 import { FastifyModernImagesOptionsCompression } from './types';
+import { spawn } from 'child_process';
 
 export async function stream2buffer(stream: Stream): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {
@@ -37,4 +38,16 @@ export function getBestFormat(accept: string = '', metadata: Metadata, formats: 
 
 export function isStream(stream: any) {
     return stream !== null && typeof stream === 'object' && typeof stream.pipe === 'function';
+}
+
+export function removeBackground(input: Buffer, model = 'u2netp'): Promise<Buffer> {
+    const child = spawn('rembg', ['i', '-m', model]);
+
+    return new Promise(resolve => {
+        child.stdin.write(input, () => {
+            child.stdin.end();
+
+            resolve(stream2buffer(child.stdout));
+        });
+    });
 }

@@ -4,11 +4,14 @@ import { Stream } from 'stream';
 import merge from 'lodash/merge';
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { FastifyModernImagesOptions, MinifyRequest } from './types';
-import { getBestFormat, guard, isStream, stream2buffer, validatePayload } from './utils';
+import { getBestFormat, guard, isStream, stream2buffer, validatePayload, removeBackground } from './utils';
 
 const defaults: FastifyModernImagesOptions = {
     regex: /.*/,
     quality: '7',
+    rembg: {
+        model: 'u2netp'
+    },
     compression: {
         jpeg: {
             enabled: true,
@@ -110,6 +113,10 @@ async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModern
             payload = await stream2buffer(payload as Stream);
         }
 
+        if (typeof request.query.ai !== 'undefined') {
+            payload = await removeBackground(payload as Buffer, options.rembg?.model);
+        }
+
         const instance = sharp(payload as Buffer);
         const metadata = await instance.metadata();
 
@@ -139,6 +146,12 @@ async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModern
         const uQuality = request.query.quality ?? request.query.q ?? options.quality;
         // @ts-expect-error
         const quality = format.quality[uQuality];
+
+        if (request.query.background || request.query.b) {
+            instance.flatten({
+                background: request.query.background ?? request.query.b
+            });
+        }
 
         const output = await instance.toFormat(format.format as any, merge(format.options, { quality })).toBuffer();
 
