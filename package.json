@@ -18,28 +18,28 @@
   },
   "license": "MIT",
   "dependencies": {
-    "fastify-plugin": "^4.5.0",
+    "fastify-plugin": "^4.5.1",
     "lodash": "^4.17.21",
-    "sharp": "^0.31.3"
+    "sharp": "^0.32.6"
   },
   "devDependencies": {
-    "@fastify/static": "^6.9.0",
-    "@types/chai": "^4.3.4",
-    "@types/chai-as-promised": "^7.1.5",
-    "@types/lodash": "^4.14.191",
-    "@types/mocha": "^10.0.1",
-    "@types/node": "^18.13.0",
+    "@fastify/static": "^6.11.2",
+    "@types/chai": "^4.3.6",
+    "@types/chai-as-promised": "^7.1.6",
+    "@types/lodash": "^4.14.199",
+    "@types/mocha": "^10.0.2",
+    "@types/node": "^20.8.2",
     "@types/sharp": "^0.31.1",
-    "chai": "^4.3.7",
+    "chai": "^4.3.10",
     "chai-as-promised": "^7.1.1",
     "codecov": "^3.8.3",
-    "fastify": "^4.13.0",
+    "fastify": "^4.23.2",
     "mocha": "^10.2.0",
-    "mocha-junit-reporter": "^2.2.0",
+    "mocha-junit-reporter": "^2.2.1",
     "nyc": "^15.1.0",
     "ts-mocha": "^10.0.0",
-    "tsc-watch": "^6.0.0",
-    "typescript": "^4.9.5"
+    "tsc-watch": "^6.0.4",
+    "typescript": "^5.2.2"
   },
   "keywords": [
     "fastify",
