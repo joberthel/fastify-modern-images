@@ -80,6 +80,7 @@ http://localhost:3000/test.jpg?width=150&height=200
 http://localhost:3000/test.jpg?width=150&height=200&fit=contain&background=red
 http://localhost:3000/test.jpg?width=150&height=200&position=bottom
 http://localhost:3000/test.jpg?rotation=45
+http://localhost:3000/test.jpg?trim
 ```
 
 You can also use short versions of the parameters.
@@ -91,6 +92,7 @@ http://localhost:3000/test.jpg?w=150&h=200
 http://localhost:3000/test.jpg?w=150&h=200&f=contain&b=red
 http://localhost:3000/test.jpg?w=150&h=200&p=bottom
 http://localhost:3000/test.jpg?r=45
+http://localhost:3000/test.jpg?t
 ```
 
 Have a look at the [sharp documentation](https://sharp.pixelplumbing.com/api-resize#resize) for all available options.
@@ -114,5 +116,7 @@ Examples:
 
 ```
 http://localhost:3000/product.jpeg?ai
+http://localhost:3000/product.jpeg?ai=u2netp // Define which model should be used.
 http://localhost:3000/product.jpeg?ai&background=red
+http://localhost:3000/product.jpeg?a // Short version
 ```

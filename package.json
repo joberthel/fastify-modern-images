@@ -1,6 +1,6 @@
 {
   "name": "fastify-modern-images",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Fastify plugin, which converts images automatically into modern formats.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

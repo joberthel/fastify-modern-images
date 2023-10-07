@@ -113,11 +113,18 @@ async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModern
             payload = await stream2buffer(payload as Stream);
         }
 
-        if (typeof request.query.ai !== 'undefined') {
-            payload = await removeBackground(payload as Buffer, request.query.ai?.length > 0 ? request.query.ai : options.rembg?.model);
+        const ai = request.query.ai ?? request.query.a
+        if (typeof ai !== 'undefined') {
+            payload = await removeBackground(payload as Buffer, ai.length > 0 ? ai : options.rembg?.model);
         }
 
         const instance = sharp(payload as Buffer);
+
+        const trim = request.query.trim ?? request.query.t
+        if (typeof trim !== 'undefined') {
+            instance.trim();
+        }
+
         const metadata = await instance.metadata();
 
         const format = getBestFormat(request.headers.accept, metadata, Object.values(options.compression as any));

@@ -27,6 +27,7 @@ export type MinifyQuerystring = {
     background?: string;
     rotation?: string;
     ai?: string;
+    trim?: string;
     /** Shortcuts */
     q: MinifyQuerystring['quality'];
     w: MinifyQuerystring['width'];
@@ -35,6 +36,8 @@ export type MinifyQuerystring = {
     p: MinifyQuerystring['position'];
     b: MinifyQuerystring['background'];
     r: MinifyQuerystring['rotation'];
+    a: MinifyQuerystring['ai'];
+    t: MinifyQuerystring['trim'];
 };
 
 export type MinifyRequest = {
