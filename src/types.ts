@@ -26,7 +26,7 @@ export type MinifyQuerystring = {
         | 'attention';
     background?: string;
     rotation?: string;
-    ai?: null;
+    ai?: string;
     /** Shortcuts */
     q: MinifyQuerystring['quality'];
     w: MinifyQuerystring['width'];
