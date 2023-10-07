@@ -7,6 +7,12 @@ import fastifyStatic from '@fastify/static';
 
 import fastify, { FastifyInstance } from 'fastify';
 
+function sleep(ms: number) {
+    return new Promise(resolve => {
+        setTimeout(resolve, ms);
+    })
+}
+
 async function fetch(path, accept = ''): Promise<string> {
     return new Promise((resolve, reject) => {
         const req = http.request(
@@ -50,6 +56,7 @@ describe('default behaviour', () => {
     });
 
     after(async () => {
+        await sleep(10);
         await server.close();
     });
 
@@ -113,6 +120,7 @@ describe('guard behaviour', () => {
     });
 
     after(async () => {
+        await sleep(10);
         await server.close();
     });
 
@@ -145,6 +153,7 @@ describe('passthrough behaviour', () => {
     });
 
     after(async () => {
+        await sleep(10);
         await server.close();
     });
 
