@@ -10,7 +10,7 @@ const defaults: FastifyModernImagesOptions = {
     regex: /.*/,
     quality: '7',
     rembg: {
-        model: 'u2netp'
+        model: 'isnet-general-use'
     },
     compression: {
         jpeg: {
@@ -114,7 +114,7 @@ async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModern
         }
 
         if (typeof request.query.ai !== 'undefined') {
-            payload = await removeBackground(payload as Buffer, options.rembg?.model);
+            payload = await removeBackground(payload as Buffer, request.query.ai?.length > 0 ? request.query.ai : options.rembg?.model);
         }
 
         const instance = sharp(payload as Buffer);
