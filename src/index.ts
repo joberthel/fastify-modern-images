@@ -113,14 +113,14 @@ async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModern
             payload = await stream2buffer(payload as Stream);
         }
 
-        const ai = request.query.ai ?? request.query.a
+        const ai = request.query.ai ?? request.query.a;
         if (typeof ai !== 'undefined') {
             payload = await removeBackground(payload as Buffer, ai.length > 0 ? ai : options.rembg?.model);
         }
 
         const instance = sharp(payload as Buffer);
 
-        const trim = request.query.trim ?? request.query.t
+        const trim = request.query.trim ?? request.query.t;
         if (typeof trim !== 'undefined') {
             instance.trim();
         }
@@ -176,6 +176,6 @@ async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModern
 }
 
 export default fp(fastifyModernImages, {
-    fastify: '4.x',
+    fastify: '5.x',
     name: 'fastify-modern-images'
 });
