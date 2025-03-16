@@ -105,6 +105,16 @@ describe('default behaviour', () => {
         expect(await fetch('/test.jpg?quality=3')).to.eq('image/jpeg');
         expect(await fetch('/test.jpg?q=3')).to.eq('image/jpeg');
     });
+
+    it('should return trimmed jpeg', async () => {
+        expect(await fetch('/product.jpeg?trim')).to.eq('image/jpeg');
+        expect(await fetch('/product.jpeg?t')).to.eq('image/jpeg');
+    });
+
+    it('should return image with removed background', async () => {
+        expect(await fetch('/product.jpeg?ai&background=red')).to.eq('image/png');
+        expect(await fetch('/product.jpeg?a&b=red')).to.eq('image/png');
+    });
 });
 
 describe('guard behaviour', () => {
