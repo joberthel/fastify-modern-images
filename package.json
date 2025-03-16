@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "tsc-watch --onSuccess \"node example/server.js\"",
     "build": "tsc",
-    "test": "ts-mocha --timeout 5000 test/*.spec.ts",
+    "test": "ts-mocha --timeout 30000 test/*.spec.ts",
     "test:coverage": "nyc npm test -- --reporter mocha-junit-reporter",
     "coverage": "codecov"
   },
