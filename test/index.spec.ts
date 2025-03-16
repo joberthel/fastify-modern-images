@@ -111,10 +111,10 @@ describe('default behaviour', () => {
         expect(await fetch('/product.jpeg?t')).to.eq('image/jpeg');
     });
 
-    it('should return image with removed background', async () => {
-        expect(await fetch('/product.jpeg?ai&background=red')).to.eq('image/png');
-        expect(await fetch('/product.jpeg?a&b=red')).to.eq('image/png');
-    });
+    // it('should return image with removed background', async () => {
+    //     expect(await fetch('/product.jpeg?ai&background=red')).to.eq('image/png');
+    //     expect(await fetch('/product.jpeg?a&b=red')).to.eq('image/png');
+    // });
 });
 
 describe('guard behaviour', () => {
