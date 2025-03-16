@@ -1,0 +1,29 @@
+name: Test and Publish
+
+on: [push]
+
+jobs:
+  test_and_publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.13
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.8
+      - run: pip install "rembg[cli]"
+      - run: npm install
+      - run: |
+          npm run test:coverage
+          npm run coverage
+      - if: github.ref == 'refs/heads/main'
+        run: |
+          export COMMIT_MESSAGE="${{ github.event.head_commit.message }}"
+          if [[ $COMMIT_MESSAGE == *"[skip npm]"* ]]; then
+            echo "Skipping npm publish."
+          else
+            echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > .npmrc
+            npm publish
+          fi
