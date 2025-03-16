@@ -8,8 +8,7 @@
     "dev": "tsc-watch --onSuccess \"node example/server.js\"",
     "build": "tsc",
     "test": "ts-mocha --timeout 30000 test/*.spec.ts",
-    "test:coverage": "nyc npm test -- --reporter mocha-junit-reporter",
-    "coverage": "codecov"
+    "test:coverage": "nyc npm test -- --reporter mocha-junit-reporter"
   },
   "author": "Johannes Berthel",
   "repository": {
@@ -32,7 +31,6 @@
     "@types/sharp": "^0.32.0",
     "chai": "^4.3.10",
     "chai-as-promised": "^7.1.1",
-    "codecov": "^3.8.3",
     "fastify": "^5.2.1",
     "mocha": "^10.2.0",
     "mocha-junit-reporter": "^2.2.1",
