@@ -13,7 +13,7 @@
   "author": "Johannes Berthel",
   "repository": {
     "type": "git",
-    "url": "git://github.com/joberthel/fastify-modern-images.git"
+    "url": "git+https://github.com/joberthel/fastify-modern-images.git"
   },
   "license": "MIT",
   "dependencies": {
