@@ -12,7 +12,7 @@ export interface MinifyQuerystring {
     | 'left bottom'
     | 'left'
     | 'left top'
-    | 'orth'
+    | 'north'
     | 'northeast'
     | 'east'
     | 'southeast'

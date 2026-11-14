@@ -99,9 +99,6 @@ export function parsePosition(value?: string): string {
   if (!isNonEmpty(value)) {
     return 'centre'
   }
-  if (value === 'orth') {
-    return 'north'
-  }
   if (VALID_POSITION_VALUES.has(value)) {
     return value
   }

@@ -69,10 +69,9 @@ describe('validation helpers', () => {
   })
 
   describe('parsePosition', () => {
-    it('accepts valid positions, maps orth to north, and defaults invalid ones to centre', () => {
+    it('accepts valid positions and defaults invalid ones to centre', () => {
       expect(parsePosition('top')).toBe('top')
       expect(parsePosition('north')).toBe('north')
-      expect(parsePosition('orth')).toBe('north')
       expect(parsePosition('entropy')).toBe('entropy')
       expect(parsePosition('invalid')).toBe('centre')
       expect(parsePosition(undefined)).toBe('centre')
