@@ -20,9 +20,51 @@ export function validatePayload(contentType: string | string[] | number = '', va
   return normalizedValidContentTypes.includes(normalizedContentType) && (isStream(payload) || Buffer.isBuffer(payload))
 }
 
-export function getBestFormat(accept: string = '', metadata: Metadata, formats: CompressionConfig[]): CompressionConfig | false {
+export function isMediaTypeAccepted(accept: string, mediaType: string): boolean {
+  if (!accept) {
+    return false
+  }
+
+  const target = mediaType.toLowerCase()
+  for (const part of accept.split(',')) {
+    const [rawType, ...params] = part.split(';')
+    if (rawType.trim().toLowerCase() !== target) {
+      continue
+    }
+
+    let q = 1
+    for (const param of params) {
+      const [rawKey, rawVal] = param.split('=')
+      if (rawKey?.trim().toLowerCase() === 'q' && rawVal !== undefined) {
+        const parsed = Number.parseFloat(rawVal.trim())
+        if (!Number.isNaN(parsed)) {
+          q = parsed
+        }
+      }
+    }
+
+    if (q > 0) {
+      return true
+    }
+  }
+
+  return false
+}
+
+export function getBestFormat(
+  accept: string = '',
+  metadata: Metadata,
+  formats: CompressionConfig[],
+  flattened: boolean = false,
+): CompressionConfig | false {
+  const hasAlpha = !flattened && metadata.hasAlpha === true
   const sorted = formats
-    .filter(item => item.enabled && (metadata.hasAlpha !== true || item.alpha) && !(metadata.format === 'png' && item.format === 'jpeg') && item.supported(accept))
+    .filter(item =>
+      item.enabled
+      && (!hasAlpha || item.alpha)
+      && (flattened || !(metadata.format === 'png' && item.format === 'jpeg'))
+      && item.supported(accept),
+    )
     .sort((a, b) => b.priority - a.priority)
 
   if (sorted.length > 0) {

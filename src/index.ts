@@ -4,7 +4,7 @@ import type { CompressionConfig, FastifyModernImagesOptions, MinifyQuerystring, 
 import { buffer as streamToBuffer } from 'node:stream/consumers'
 import fp from 'fastify-plugin'
 import sharp from 'sharp'
-import { appendVaryHeader, deepMerge, getBestFormat, guard, isStream, removeBackground, validatePayload } from './utils'
+import { appendVaryHeader, deepMerge, getBestFormat, guard, isMediaTypeAccepted, isStream, removeBackground, validatePayload } from './utils'
 import { isNonEmpty, parseBackground, parseDimension, parseFit, parsePosition, parseRotation } from './validation'
 
 const defaults: ResolvedFastifyModernImagesOptions = {
@@ -57,7 +57,7 @@ const defaults: ResolvedFastifyModernImagesOptions = {
         effort: 3,
       },
       contentType: 'image/avif',
-      supported: accept => accept.includes('image/avif'),
+      supported: accept => isMediaTypeAccepted(accept, 'image/avif'),
     },
     webp: {
       enabled: true,
@@ -77,7 +77,7 @@ const defaults: ResolvedFastifyModernImagesOptions = {
       },
       options: {},
       contentType: 'image/webp',
-      supported: accept => accept.includes('image/webp'),
+      supported: accept => isMediaTypeAccepted(accept, 'image/webp'),
     },
     png: {
       enabled: true,
@@ -194,6 +194,14 @@ async function processPayload(
   payload: unknown,
   options: ResolvedFastifyModernImagesOptions,
 ): Promise<unknown> {
+  const compressionList: CompressionConfig[] = Object.values(options.compression)
+  const accept = request.headers.accept ?? ''
+  if (!compressionList.some(item => item.enabled && item.supported(accept))) {
+    const inputType = String(reply.getHeader('Content-Type') ?? '')
+    request.log.warn(`No adequate format for image of type "${inputType}" was found.`)
+    return payload
+  }
+
   const buffer = await resolveInputBuffer(payload, request.query, options.rembg)
   const instance = sharp(buffer)
 
@@ -202,8 +210,8 @@ async function processPayload(
   }
 
   const metadata = await instance.metadata()
-  const compressionList: CompressionConfig[] = Object.values(options.compression)
-  const format = getBestFormat(request.headers.accept, metadata, compressionList)
+  const flattened = isNonEmpty(parseBackground(request.query.background ?? request.query.b))
+  const format = getBestFormat(accept, metadata, compressionList, flattened)
 
   if (format === false) {
     const inputType = String(reply.getHeader('Content-Type') ?? '')

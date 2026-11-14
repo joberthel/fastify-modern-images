@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { PassThrough, Stream } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import { appendVaryHeader, deepMerge, getBestFormat, guard, isStream, removeBackground, validatePayload } from '../src/utils'
+import { appendVaryHeader, deepMerge, getBestFormat, guard, isMediaTypeAccepted, isStream, removeBackground, validatePayload } from '../src/utils'
 
 vi.mock('node:child_process', () => ({
   spawn: vi.fn(),
@@ -138,6 +138,30 @@ describe('utils - getBestFormat', () => {
 
     const jpegResult = getBestFormat(undefined, { format: 'jpeg', hasAlpha: false }, formats)
     expect(jpegResult !== false && jpegResult.format).toBe('jpeg')
+  })
+
+  it('should allow jpeg for alpha png when flattened is true', () => {
+    const formats = createFormats()
+
+    const unflattenedResult = getBestFormat('image/jpeg', { format: 'png', hasAlpha: true }, formats, false)
+    expect(unflattenedResult !== false && unflattenedResult.format).toBe('png')
+
+    const flattenedResult = getBestFormat('image/jpeg', { format: 'png', hasAlpha: true }, formats, true)
+    expect(flattenedResult !== false && flattenedResult.format).toBe('jpeg')
+  })
+})
+
+describe('utils - isMediaTypeAccepted', () => {
+  it('should respect quality weights including q=0', () => {
+    expect(isMediaTypeAccepted('', 'image/avif')).toBe(false)
+    expect(isMediaTypeAccepted('image/avif', 'image/avif')).toBe(true)
+    expect(isMediaTypeAccepted('image/avif;q=0', 'image/avif')).toBe(false)
+    expect(isMediaTypeAccepted('image/avif; q=0.0', 'image/avif')).toBe(false)
+    expect(isMediaTypeAccepted('image/avif;level=1;q=0', 'image/avif')).toBe(false)
+    expect(isMediaTypeAccepted('image/avif;q=0.5', 'image/avif')).toBe(true)
+    expect(isMediaTypeAccepted('IMAGE/AVIF;Q=0.8', 'image/avif')).toBe(true)
+    expect(isMediaTypeAccepted('image/avif;q=0, image/webp;q=0.8', 'image/avif')).toBe(false)
+    expect(isMediaTypeAccepted('image/avif;q=0, image/webp;q=0.8', 'image/webp')).toBe(true)
   })
 })
 

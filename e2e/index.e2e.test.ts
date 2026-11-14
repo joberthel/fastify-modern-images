@@ -374,3 +374,52 @@ describe('vary header', () => {
     await server.close()
   })
 })
+
+describe('issue #36: flatten, q=0, and early format check', () => {
+  it('selects jpeg for alpha png when flattened with background', async () => {
+    const server = fastify()
+    server.register(fastifyModernImages)
+    server.register(fastifyStatic, {
+      root: path.join(__dirname, '../example/public'),
+      prefix: '/',
+    })
+
+    const res = await server.inject({
+      method: 'GET',
+      url: '/test-alpha.png?background=white',
+      headers: { accept: 'image/jpeg' },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['content-type']).toBe('image/jpeg')
+
+    await server.close()
+  })
+
+  it('respects Accept q=0 for avif and webp', async () => {
+    const server = fastify()
+    server.register(fastifyModernImages)
+    server.register(fastifyStatic, {
+      root: path.join(__dirname, '../example/public'),
+      prefix: '/',
+    })
+
+    const resAvifZero = await server.inject({
+      method: 'GET',
+      url: '/test.jpg',
+      headers: { accept: 'image/avif;q=0, image/webp;q=0.8' },
+    })
+    expect(resAvifZero.statusCode).toBe(200)
+    expect(resAvifZero.headers['content-type']).toBe('image/webp')
+
+    const resBothZero = await server.inject({
+      method: 'GET',
+      url: '/test.jpg',
+      headers: { accept: 'image/avif;q=0, image/webp;q=0' },
+    })
+    expect(resBothZero.statusCode).toBe(200)
+    expect(resBothZero.headers['content-type']).toBe('image/jpeg')
+
+    await server.close()
+  })
+})
