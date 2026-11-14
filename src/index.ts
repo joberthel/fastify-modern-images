@@ -168,7 +168,7 @@ async function encodeAndReply(
   const inputType = String(reply.getHeader('Content-Type') ?? '')
   const reduction = Math.round((1 - output.length / inputLength) * 100)
   request.log.info(
-    `Input: ${inputType}, Output: ${format.contentType}, Quality: ${String(quality ?? '')}, Reduction: ${reduction}%)`,
+    `Input: ${inputType}, Output: ${format.contentType}, Quality: ${String(quality ?? '')}, Reduction: ${reduction}%`,
   )
 
   reply.header('Content-Type', format.contentType)
