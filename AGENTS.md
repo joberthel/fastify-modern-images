@@ -8,4 +8,5 @@ All of the following checks must pass before handing work back:
 
 - `pnpm build`
 - `pnpm test:coverage`
+- `pnpm lint`
 - `echo "<commit-msg>" | pnpm run commitlint`

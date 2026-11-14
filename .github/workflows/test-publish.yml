@@ -6,24 +6,39 @@ jobs:
   test_and_publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
       # - uses: actions/setup-python@v5
       #   with:
       #     python-version: 3.13
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20.8
       # - run: pip install "rembg[cli]"
-      - run: npm install
-      - run: |
-          npm run test:coverage
-      - uses: codecov/codecov-action@v5
-      - if: github.ref == 'refs/heads/main'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests with coverage
+        run: pnpm test:coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+
+      - name: Publish to npm
+        if: github.ref == 'refs/heads/main'
         run: |
           export COMMIT_MESSAGE="${{ github.event.head_commit.message }}"
           if [[ $COMMIT_MESSAGE == *"[skip npm]"* ]]; then
             echo "Skipping npm publish."
           else
             echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > .npmrc
-            npm publish
+            pnpm publish
           fi

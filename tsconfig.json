@@ -1,15 +1,15 @@
 {
-    "compilerOptions": {
-        "target": "es6",
-        "module": "commonjs",
-        "outDir": "dist",
-        "pretty": true,
-        "declaration": true,
-        "strict": true,
-        "noImplicitAny": true,
-        "esModuleInterop": true,
-        "types": ["node"]
-    },
-    "include": ["src/*"],
-    "exclude": []
+  "compilerOptions": {
+    "target": "es6",
+    "module": "commonjs",
+    "pretty": true,
+    "types": ["node"],
+    "strict": true,
+    "noImplicitAny": true,
+    "declaration": true,
+    "outDir": "dist",
+    "esModuleInterop": true
+  },
+  "include": ["src/*"],
+  "exclude": []
 }

@@ -2,6 +2,20 @@
   "name": "fastify-modern-images",
   "version": "0.7.0",
   "description": "Fastify plugin, which converts images automatically into modern formats.",
+  "author": "Johannes Berthel",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joberthel/fastify-modern-images.git"
+  },
+  "keywords": [
+    "fastify",
+    "webp",
+    "avif",
+    "jpeg",
+    "png",
+    "image tranformation"
+  ],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -10,20 +24,17 @@
     "build": "tsc",
     "test": "ts-mocha --timeout 30000 test/*.spec.ts",
     "test:coverage": "nyc npm test -- --reporter mocha-junit-reporter",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "commitlint": "commitlint"
   },
-  "author": "Johannes Berthel",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/joberthel/fastify-modern-images.git"
-  },
-  "license": "MIT",
   "dependencies": {
     "fastify-plugin": "^5.0.1",
     "lodash": "^4.17.21",
     "sharp": "^0.33.5"
   },
   "devDependencies": {
+    "@antfu/eslint-config": "^10.0.0",
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.4",
     "@commitlint/types": "^21.2.3",
@@ -36,21 +47,15 @@
     "@types/sharp": "^0.32.0",
     "chai": "^4.3.10",
     "chai-as-promised": "^7.1.1",
+    "eslint": "^10.14.0",
     "fastify": "^5.2.1",
     "husky": "^9.1.7",
+    "jiti": "^2.7.0",
     "mocha": "^10.2.0",
     "mocha-junit-reporter": "^2.2.1",
     "nyc": "^15.1.0",
     "ts-mocha": "^10.0.0",
     "tsc-watch": "^6.0.4",
     "typescript": "^5.2.2"
-  },
-  "keywords": [
-    "fastify",
-    "webp",
-    "avif",
-    "jpeg",
-    "png",
-    "image tranformation"
-  ]
+  }
 }
