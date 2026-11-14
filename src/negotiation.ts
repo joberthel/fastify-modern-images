@@ -1,7 +1,9 @@
 import type { Stream } from 'node:stream'
 import type { Metadata } from 'sharp'
-import type { CompressionConfig } from './types'
+import type { CompressionConfig, MinifyQuerystring } from './types'
 import { Buffer } from 'node:buffer'
+import { createHash } from 'node:crypto'
+import { parseBackground, parseDimension, parseFit, parsePosition, parseRotation, parseTrim } from './validation'
 
 export function guard(regex: RegExp, path: string = '/'): boolean {
   regex.lastIndex = 0
@@ -103,4 +105,61 @@ export function appendVaryHeader(
   }
 
   return parts.join(', ')
+}
+
+export function computeDerivedEtag(
+  upstreamEtag: string,
+  format: string,
+  quality: number | undefined,
+  query: MinifyQuerystring,
+  aiModel?: string,
+): string {
+  const normalized = {
+    upstreamEtag,
+    format,
+    quality: quality ?? null,
+    width: parseDimension(query.width ?? query.w),
+    height: parseDimension(query.height ?? query.h),
+    fit: parseFit(query.fit ?? query.f) ?? null,
+    position: parsePosition(query.position ?? query.p) ?? null,
+    background: parseBackground(query.background ?? query.b) ?? null,
+    rotation: parseRotation(query.rotation ?? query.r) ?? null,
+    trim: parseTrim(query.trim ?? query.t),
+    ai: aiModel ?? null,
+  }
+  const digest = createHash('sha256')
+    .update(JSON.stringify(normalized))
+    .digest('base64url')
+    .slice(0, 16)
+  return `W/"${digest}"`
+}
+
+function stripWeakPrefix(etag: string): string {
+  const trimmed = etag.trim()
+  return trimmed.startsWith('W/')
+    ? trimmed.slice(2)
+    : trimmed
+}
+
+export function matchesIfNoneMatch(
+  ifNoneMatch: string | string[] | undefined,
+  etag: string,
+): boolean {
+  if (ifNoneMatch === undefined) {
+    return false
+  }
+
+  const raw = Array.isArray(ifNoneMatch)
+    ? ifNoneMatch.join(',')
+    : ifNoneMatch
+  const target = stripWeakPrefix(etag)
+
+  for (const candidate of raw.split(',')) {
+    const trimmed = candidate.trim()
+    if (trimmed === '*' || stripWeakPrefix(trimmed) === target) {
+      return true
+    }
+  }
+
+  return false
 }

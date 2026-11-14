@@ -287,4 +287,93 @@ describe('fastifyModernImages unit tests - transforms and encoding', () => {
     expect(secondResult).toEqual(Buffer.from('encoded'))
     expect(mockSharpInstance.toFormat).toHaveBeenCalledTimes(1)
   })
+
+  it('sets derived ETag when upstream ETag is present and returns 304 on If-None-Match', async () => {
+    const onSend = await registerPlugin()
+    const reply1 = createReply('image/jpeg')
+    reply1.getHeader = vi.fn((name: string) => {
+      if (name === 'Content-Type')
+        return 'image/jpeg'
+      if (name === 'etag')
+        return '"upstream-123"'
+      return undefined
+    })
+
+    const res1 = await onSend(createRequest(), reply1, Buffer.from('raw'))
+    expect(res1).toEqual(Buffer.from('encoded'))
+    const etagCall = vi.mocked(reply1.header).mock.calls.find(call => call[0] === 'ETag')
+    expect(etagCall).toBeDefined()
+    const derivedEtag = etagCall![1] as string
+    expect(derivedEtag).toMatch(/^W\/"[\w-]+"$/)
+
+    mockSharpInstance.toFormat.mockClear()
+    const reply2 = createReply('image/jpeg') as ReturnType<typeof createReply> & { code: ReturnType<typeof vi.fn> }
+    reply2.code = vi.fn()
+    reply2.getHeader = vi.fn((name: string) => {
+      if (name === 'Content-Type')
+        return 'image/jpeg'
+      if (name === 'etag')
+        return '"upstream-123"'
+      return undefined
+    })
+    const req2 = createRequest({
+      headers: {
+        'accept': 'image/webp',
+        'if-none-match': derivedEtag,
+      },
+    })
+
+    const res2 = await onSend(req2, reply2, Buffer.from('raw'))
+    expect(res2).toBe('')
+    expect(reply2.code).toHaveBeenCalledWith(304)
+    expect(reply2.header).toHaveBeenCalledWith('ETag', derivedEtag)
+    expect(mockSharpInstance.toFormat).not.toHaveBeenCalled()
+  })
+
+  it('coalesces concurrent identical requests and cleans up on error', async () => {
+    const onSend = await registerPlugin()
+    let resolveEncode!: (val: Buffer) => void
+    mockSharpInstance.toFormat.mockReturnValueOnce({
+      toBuffer: vi.fn(async () => new Promise<Buffer>((resolve) => {
+        resolveEncode = resolve
+      })),
+    })
+
+    const p1 = onSend(createRequest({
+      raw: { url: '/same.jpg?w=50' },
+    }), createReply('image/jpeg'), Buffer.from('raw'))
+    const p2 = onSend(createRequest({
+      raw: { url: '/same.jpg?w=50' },
+    }), createReply('image/jpeg'), Buffer.from('raw'))
+
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(mockSharpInstance.toFormat).toHaveBeenCalledTimes(1)
+
+    resolveEncode(Buffer.from('coalesced'))
+    const [r1, r2] = await Promise.all([p1, p2])
+    expect(r1).toEqual(Buffer.from('coalesced'))
+    expect(r2).toEqual(Buffer.from('coalesced'))
+
+    mockSharpInstance.toFormat.mockClear()
+    mockSharpInstance.toFormat.mockReturnValueOnce({
+      toBuffer: vi.fn().mockRejectedValueOnce(new Error('encode failed')),
+    })
+    await expect(
+      onSend(createRequest({
+        raw: { url: '/fail.jpg' },
+      }), createReply('image/jpeg'), Buffer.from('raw')),
+    ).rejects.toThrow('encode failed')
+
+    mockSharpInstance.toFormat.mockReturnValueOnce({
+      toBuffer: vi.fn().mockResolvedValueOnce(Buffer.from('recovered')),
+    })
+    const recovered = await onSend(
+      createRequest({
+        raw: { url: '/fail.jpg' },
+      }),
+      createReply('image/jpeg'),
+      Buffer.from('raw'),
+    )
+    expect(recovered).toEqual(Buffer.from('recovered'))
+  })
 })

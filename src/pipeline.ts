@@ -3,7 +3,7 @@ import type { Buffer } from 'node:buffer'
 import type { CompressionConfig, MinifyQuerystring, MinifyRequest, RembgOptions, ResolvedFastifyModernImagesOptions } from './types'
 import { buffer as streamToBuffer } from 'node:stream/consumers'
 import sharp from 'sharp'
-import { appendVaryHeader, getBestFormat, isStream } from './negotiation'
+import { appendVaryHeader, computeDerivedEtag, getBestFormat, isStream, matchesIfNoneMatch } from './negotiation'
 import { removeBackground } from './providers/rembg'
 import { isNonEmpty, parseBackground, parseDimension, parseFit, parsePosition, parseQuality, parseRotation, parseTrim } from './validation'
 
@@ -69,6 +69,41 @@ interface EncodeContext {
   format: CompressionConfig
   options: ResolvedFastifyModernImagesOptions
   inputLength: number
+  quality: number | undefined
+  derivedEtag: string | undefined
+}
+
+async function encodeWithCoalescing(
+  instance: sharp.Sharp,
+  request: FastifyRequest<MinifyRequest>,
+  format: CompressionConfig,
+  quality: number | undefined,
+  inFlight?: Map<string, Promise<Buffer>>,
+): Promise<Buffer> {
+  const runEncode = async (): Promise<Buffer> => {
+    applySharpTransforms(instance, request.query)
+    return instance.toFormat(format.format, { ...format.options, quality }).toBuffer()
+  }
+
+  if (!inFlight) {
+    return runEncode()
+  }
+
+  const key = `${request.raw.url ?? ''}:${format.format}:${String(quality ?? '')}`
+  let promise = inFlight.get(key)
+  if (!promise) {
+    promise = runEncode()
+    inFlight.set(key, promise)
+  }
+
+  try {
+    return await promise
+  }
+  finally {
+    if (inFlight.get(key) === promise) {
+      inFlight.delete(key)
+    }
+  }
 }
 
 async function encodeAndReply(
@@ -76,10 +111,10 @@ async function encodeAndReply(
   request: FastifyRequest<MinifyRequest>,
   reply: FastifyReply,
   context: EncodeContext,
+  inFlight?: Map<string, Promise<Buffer>>,
 ): Promise<Buffer> {
-  const { format, options, inputLength } = context
-  const quality = parseQuality(request.query.quality ?? request.query.q, format.quality, options.quality)
-  const output = await instance.toFormat(format.format, { ...format.options, quality }).toBuffer()
+  const { format, inputLength, quality, derivedEtag } = context
+  const output = await encodeWithCoalescing(instance, request, format, quality, inFlight)
 
   const inputType = String(reply.getHeader('Content-Type') ?? '')
   const reduction = inputLength > 0
@@ -92,7 +127,12 @@ async function encodeAndReply(
   reply.header('Content-Type', format.contentType)
   reply.header('Content-Length', output.length)
   reply.header('Vary', appendVaryHeader(reply.getHeader('Vary'), 'Accept'))
-  reply.removeHeader('etag')
+  if (derivedEtag !== undefined) {
+    reply.header('ETag', derivedEtag)
+  }
+  else {
+    reply.removeHeader('etag')
+  }
   reply.removeHeader('accept-ranges')
 
   processedReplies.add(reply)
@@ -105,6 +145,7 @@ export async function processPayload(
   reply: FastifyReply,
   payload: unknown,
   options: ResolvedFastifyModernImagesOptions,
+  inFlight?: Map<string, Promise<Buffer>>,
 ): Promise<unknown> {
   const compressionList: CompressionConfig[] = Object.values(options.compression)
   const accept = request.headers.accept ?? ''
@@ -131,6 +172,33 @@ export async function processPayload(
     return buffer
   }
 
-  applySharpTransforms(instance, request.query)
-  return encodeAndReply(instance, request, reply, { format, options, inputLength })
+  const quality = parseQuality(request.query.quality ?? request.query.q, format.quality, options.quality)
+  const ai = request.query.ai ?? request.query.a
+  const aiModel = options.rembg.enabled && typeof ai === 'string'
+    ? (ai.length > 0
+        ? ai
+        : options.rembg.model)
+    : undefined
+  const upstreamEtag = reply.getHeader('etag')
+  const derivedEtag = typeof upstreamEtag === 'string' && upstreamEtag.length > 0
+    ? computeDerivedEtag(upstreamEtag, format.format, quality, request.query, aiModel)
+    : undefined
+
+  if (derivedEtag !== undefined && matchesIfNoneMatch(request.headers['if-none-match'], derivedEtag)) {
+    reply.code(304)
+    reply.header('ETag', derivedEtag)
+    reply.header('Vary', appendVaryHeader(reply.getHeader('Vary'), 'Accept'))
+    reply.removeHeader('Content-Length')
+    reply.removeHeader('accept-ranges')
+    processedReplies.add(reply)
+    return ''
+  }
+
+  return encodeAndReply(instance, request, reply, {
+    format,
+    options,
+    inputLength,
+    quality,
+    derivedEtag,
+  }, inFlight)
 }

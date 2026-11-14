@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
+import type { Buffer } from 'node:buffer'
 import type { FastifyModernImagesOptions, MinifyRequest } from './types'
 import fp from 'fastify-plugin'
 import { resolveOptions } from './config'
@@ -8,6 +9,7 @@ import { processedReplies, processPayload } from './pipeline'
 async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModernImagesOptions) {
   const options = resolveOptions(opts)
   const contentTypes = Object.values(options.compression).map(item => item.contentType)
+  const inFlight = new Map<string, Promise<Buffer>>()
 
   fastify.addHook('onSend', async (request: FastifyRequest<MinifyRequest>, reply, payload) => {
     if (
@@ -20,7 +22,7 @@ async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModern
       return payload
     }
 
-    return processPayload(request, reply, payload, options)
+    return processPayload(request, reply, payload, options, inFlight)
   })
 }
 

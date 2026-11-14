@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { PassThrough, Stream } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
+import { computeDerivedEtag, matchesIfNoneMatch } from '../src/negotiation'
 import { appendVaryHeader, deepMerge, getBestFormat, guard, isMediaTypeAccepted, isStream, removeBackground, validatePayload } from '../src/utils'
 
 vi.mock('node:child_process', () => ({
@@ -484,5 +485,30 @@ describe('deepMerge', () => {
     expect(merged).toEqual({
       nested: { a: 1, b: 3 },
     })
+  })
+})
+
+describe('negotiation - computeDerivedEtag & matchesIfNoneMatch', () => {
+  it('computes deterministic weak ETag incorporating format, quality, and normalized params', () => {
+    const e1 = computeDerivedEtag('"abc"', 'webp', 80, { width: '100', fit: 'cover' })
+    const e2 = computeDerivedEtag('"abc"', 'webp', 80, { w: '100', f: 'cover' })
+    const e3 = computeDerivedEtag('"abc"', 'avif', 80, { width: '100', fit: 'cover' })
+    const e4 = computeDerivedEtag('"def"', 'webp', 80, { width: '100', fit: 'cover' })
+
+    expect(e1).toMatch(/^W\/"[\w-]+"$/)
+    expect(e1).toBe(e2)
+    expect(e1).not.toBe(e3)
+    expect(e1).not.toBe(e4)
+  })
+
+  it('matches If-None-Match headers with weak comparison, lists, and wildcard', () => {
+    const etag = 'W/"xyz123"'
+    expect(matchesIfNoneMatch(undefined, etag)).toBe(false)
+    expect(matchesIfNoneMatch('*', etag)).toBe(true)
+    expect(matchesIfNoneMatch('W/"xyz123"', etag)).toBe(true)
+    expect(matchesIfNoneMatch('"xyz123"', etag)).toBe(true)
+    expect(matchesIfNoneMatch('"other", W/"xyz123"', etag)).toBe(true)
+    expect(matchesIfNoneMatch(['"other"', '"xyz123"'], etag)).toBe(true)
+    expect(matchesIfNoneMatch('"other"', etag)).toBe(false)
   })
 })
