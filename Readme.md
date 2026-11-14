@@ -45,7 +45,7 @@ fastify
 
 ```
 {
-    regex: /.*/, // If it is set will check this regex against the request path. Will only apply plugin if it is true.
+    regex: /.*/, // If it is set will check this regex against request.raw.url (path + query string). Will only apply plugin if it is true.
     quality: '7', // Sets the default quality from '1' (worst), '2', ... '9' (best).
     rembg: {
         model: 'isnet-general-use' // https://github.com/danielgatis/rembg#models

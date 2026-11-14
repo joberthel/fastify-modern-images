@@ -60,6 +60,14 @@ describe('utils - stream and guard', () => {
     expect(guard(/\/foo-bar/, '/foo-bar/hello-world.jpg')).toBe(true)
     expect(guard(/\/foo-bar/, '/bar-foo/hello-world.jpg')).toBe(false)
     expect(guard(/\/foo-bar/, undefined)).toBe(false)
+
+    const globalRegex = /\/foo-bar/g
+    expect(guard(globalRegex, '/foo-bar/hello-world.jpg')).toBe(true)
+    expect(guard(globalRegex, '/foo-bar/hello-world.jpg')).toBe(true)
+
+    const stickyRegex = /\/foo-bar/y
+    expect(guard(stickyRegex, '/foo-bar/hello-world.jpg')).toBe(true)
+    expect(guard(stickyRegex, '/foo-bar/hello-world.jpg')).toBe(true)
   })
 
   it('should validate payload', () => {

@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process'
 import { buffer } from 'node:stream/consumers'
 
 export function guard(regex: RegExp, path: string = '/'): boolean {
+  regex.lastIndex = 0
   return regex.test(path)
 }
 
