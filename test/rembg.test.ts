@@ -75,7 +75,10 @@ describe('rembg - removeBackground (exit codes and signals)', () => {
     child.stderr.end('model not found')
     child.emit('close', 1, null)
 
-    await expect(promise).rejects.toThrow('rembg exited with code 1')
+    await expect(promise).rejects.toMatchObject({
+      message: 'rembg exited with code 1',
+      cause: { stderr: 'model not found' },
+    })
   })
 
   it('should reject with signal when terminated by signal', async () => {
@@ -88,7 +91,11 @@ describe('rembg - removeBackground (exit codes and signals)', () => {
     child.stderr.end()
     child.emit('close', null, 'SIGKILL')
 
-    await expect(promise).rejects.toThrow('rembg exited with signal SIGKILL')
+    await expect(promise).rejects.toSatisfy((err: unknown) => {
+      return err instanceof Error
+        && err.message === 'rembg exited with signal SIGKILL'
+        && err.cause === undefined
+    })
   })
 
   it('should ignore stdin EPIPE error and report close exit code', async () => {

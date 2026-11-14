@@ -33,7 +33,9 @@ function formatExitError(code: number | null, signal: NodeJS.Signals | null, std
     ? `code ${code}`
     : `signal ${signal ?? 'unknown'}`
   if (stderr) {
-    console.error(`rembg exited with ${status}: ${stderr}`)
+    return new Error(`rembg exited with ${status}`, {
+      cause: { stderr },
+    })
   }
   return new Error(`rembg exited with ${status}`)
 }
