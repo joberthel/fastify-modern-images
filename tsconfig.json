@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
-    "target": "es6",
-    "lib": ["es2022"],
+    "target": "ES2022",
+    "lib": ["ES2022"],
     "module": "commonjs",
     "pretty": true,
     "types": ["node"],
@@ -11,6 +11,6 @@
     "outDir": "dist",
     "esModuleInterop": true
   },
-  "include": ["src/*"],
+  "include": ["src/**/*"],
   "exclude": []
 }
