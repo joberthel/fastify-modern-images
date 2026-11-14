@@ -173,19 +173,26 @@ import { Buffer } from 'node:buffer'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
 const SECRET = process.env.IMAGE_SIGNING_SECRET
+if (!SECRET) {
+  throw new Error('IMAGE_SIGNING_SECRET is required')
+}
 
 app.register(fastifyModernImages, {
   verifyRequest: (request) => {
     const { sig, ...params } = request.query
-    if (!sig) {
+    if (typeof sig !== 'string' || sig.length === 0) {
+      return false
+    }
+    if (Object.values(params).some(v => typeof v !== 'string')) {
       return false
     }
 
     const canonical = Object.keys(params)
       .sort()
-      .map(k => `${k}=${params[k] ?? ''}`)
+      .map(k => `${k}=${params[k]}`)
       .join('&')
-    const expected = createHmac('sha256', SECRET).update(`${request.url.split('?')[0]}?${canonical}`).digest('hex')
+    const pathname = (request.raw.url ?? request.url).split('?')[0]
+    const expected = createHmac('sha256', SECRET).update(`${pathname}?${canonical}`).digest('hex')
 
     const sigBuf = Buffer.from(sig, 'utf8')
     const expBuf = Buffer.from(expected, 'utf8')
