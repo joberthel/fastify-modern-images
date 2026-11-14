@@ -91,6 +91,13 @@ describe('default behaviour - formats', () => {
     expect(meta.format).toBe('png')
   })
 
+  it('should return png for opaque png when no modern format is accepted', async () => {
+    const { contentType, body } = await fetchImage(server, '/test.png', 'image/png')
+    expect(contentType).toBe('image/png')
+    const meta = await sharp(body).metadata()
+    expect(meta.format).toBe('png')
+  })
+
   it('should work with buffer', async () => {
     const { contentType, body } = await fetchImage(server, '/buffer.jpg', 'image/avif,image/webp')
     expect(contentType).toBe('image/avif')

@@ -120,6 +120,25 @@ describe('utils - getBestFormat', () => {
 
     expect(getBestFormat('image/avif', { hasAlpha: false }, limitedFormats)).toBe(false)
   })
+
+  it('should not convert opaque png to lossy jpeg when no modern format is accepted', () => {
+    const formats = createFormats()
+
+    const pngResult = getBestFormat('image/png', { format: 'png', hasAlpha: false }, formats)
+    expect(pngResult !== false && pngResult.format).toBe('png')
+
+    const wildcardResult = getBestFormat('*/*', { format: 'png', hasAlpha: false }, formats)
+    expect(wildcardResult !== false && wildcardResult.format).toBe('png')
+
+    const noAcceptResult = getBestFormat(undefined, { format: 'png', hasAlpha: false }, formats)
+    expect(noAcceptResult !== false && noAcceptResult.format).toBe('png')
+
+    const webpResult = getBestFormat('image/webp,image/png', { format: 'png', hasAlpha: false }, formats)
+    expect(webpResult !== false && webpResult.format).toBe('webp')
+
+    const jpegResult = getBestFormat(undefined, { format: 'jpeg', hasAlpha: false }, formats)
+    expect(jpegResult !== false && jpegResult.format).toBe('jpeg')
+  })
 })
 
 function createMockChildProcess() {

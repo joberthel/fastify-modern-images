@@ -22,7 +22,7 @@ export function validatePayload(contentType: string | string[] | number = '', va
 
 export function getBestFormat(accept: string = '', metadata: Metadata, formats: CompressionConfig[]): CompressionConfig | false {
   const sorted = formats
-    .filter(item => item.enabled && (metadata.hasAlpha !== true || item.alpha) && item.supported(accept))
+    .filter(item => item.enabled && (metadata.hasAlpha !== true || item.alpha) && !(metadata.format === 'png' && item.format === 'jpeg') && item.supported(accept))
     .sort((a, b) => b.priority - a.priority)
 
   if (sorted.length > 0) {
