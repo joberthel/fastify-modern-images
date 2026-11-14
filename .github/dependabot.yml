@@ -1,0 +1,33 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: chore
+    groups:
+      npm-dependencies:
+        applies-to: version-updates
+        patterns:
+          - '*'
+      npm-security:
+        applies-to: security-updates
+        patterns:
+          - '*'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci
+    groups:
+      github-actions:
+        applies-to: version-updates
+        patterns:
+          - '*'
+      github-actions-security:
+        applies-to: security-updates
+        patterns:
+          - '*'
