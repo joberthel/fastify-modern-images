@@ -424,6 +424,15 @@ describe('fastifyModernImages unit tests - transforms and encoding', () => {
       createReply('image/jpeg'),
       Buffer.from('raw'),
     )
+    expect(mockSharpInstance.resize).not.toHaveBeenCalled()
+
+    await onSend(
+      createRequest({
+        query: { width: '500' },
+      }),
+      createReply('image/jpeg'),
+      Buffer.from('raw'),
+    )
     expect(mockSharpInstance.resize).toHaveBeenCalledWith(500, null, {
       fit: 'cover',
       position: 'centre',

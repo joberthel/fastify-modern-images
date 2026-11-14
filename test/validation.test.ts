@@ -4,6 +4,7 @@ import {
   isNonEmptyString,
   matchesUrlPattern,
   MAX_DIMENSION,
+  normalizeTransformParams,
   parseBackground,
   parseDimension,
   parseFit,
@@ -97,10 +98,13 @@ describe('validation helpers', () => {
       expect(parseBackground('#fff')).toBe('#fff')
       expect(parseBackground('#ff00aa')).toBe('#ff00aa')
       expect(parseBackground('rgb(255, 0, 128)')).toBe('rgb(255, 0, 128)')
+      expect(parseBackground('rgb(255.0, 254.9, 0)')).toBe('rgb(255.0, 254.9, 0)')
       expect(parseBackground('rgb(100%, 50%, 0%)')).toBe('rgb(100%, 50%, 0%)')
       expect(parseBackground('rgba(0, 0, 0, 0.5)')).toBe('rgba(0, 0, 0, 0.5)')
       expect(parseBackground('rgba(100%, 50%, 0%, .5)')).toBe('rgba(100%, 50%, 0%, .5)')
       expect(parseBackground('hsl(120, 100%, 50%)')).toBe('hsl(120, 100%, 50%)')
+      expect(parseBackground('hsl(360, 100%, 0%)')).toBe('hsl(360, 100%, 0%)')
+      expect(parseBackground('hsl(360.0, 100.0%, 50.5%)')).toBe('hsl(360.0, 100.0%, 50.5%)')
       expect(parseBackground('hsla(120, 100%, 50%, 1)')).toBe('hsla(120, 100%, 50%, 1)')
       expect(parseBackground('red')).toBe('red')
       expect(parseBackground('transparent')).toBe('transparent')
@@ -118,6 +122,14 @@ describe('validation helpers', () => {
       expect(parseBackground('rgb(10, 20%, 30)')).toBeUndefined()
       expect(parseBackground('rgba(0, 0, 0, 1.5)')).toBeUndefined()
       expect(parseBackground('rgba(0, 0, 0, 50%)')).toBeUndefined()
+      expect(parseBackground('rgb(256, 0, 0)')).toBeUndefined()
+      expect(parseBackground('rgb(255.5, 0, 0)')).toBeUndefined()
+      expect(parseBackground('rgb(999, 999, 999)')).toBeUndefined()
+      expect(parseBackground('rgb(101%, 0%, 0%)')).toBeUndefined()
+      expect(parseBackground('hsl(361, 50%, 50%)')).toBeUndefined()
+      expect(parseBackground('hsl(360.5, 50%, 50%)')).toBeUndefined()
+      expect(parseBackground('hsl(999, 999%, 999%)')).toBeUndefined()
+      expect(parseBackground('hsl(120, 101%, 50%)')).toBeUndefined()
     })
   })
 
@@ -167,18 +179,22 @@ describe('validation helpers', () => {
   })
 
   describe('parseTrim', () => {
-    it('returns true for empty string, true, 1, and other truthy strings', () => {
+    it('returns true only for empty string, true, and 1 (case-insensitive)', () => {
       expect(parseTrim('')).toBe(true)
       expect(parseTrim('true')).toBe(true)
+      expect(parseTrim('TRUE')).toBe(true)
       expect(parseTrim('1')).toBe(true)
-      expect(parseTrim('yes')).toBe(true)
     })
 
-    it('returns false for undefined, false, 0, and non-string values', () => {
+    it('returns false for undefined, false, 0, unrecognized strings, and non-string values', () => {
       expect(parseTrim(undefined)).toBe(false)
       expect(parseTrim('false')).toBe(false)
       expect(parseTrim('FALSE')).toBe(false)
       expect(parseTrim('0')).toBe(false)
+      expect(parseTrim('yes')).toBe(false)
+      expect(parseTrim('no')).toBe(false)
+      expect(parseTrim('off')).toBe(false)
+      expect(parseTrim('invalid')).toBe(false)
       expect(parseTrim(['true'])).toBe(false)
     })
   })
@@ -198,6 +214,34 @@ describe('validation helpers', () => {
       expect(matchesUrlPattern(stickyRegex, '/foo-bar/hello-world.jpg')).toBe(true)
 
       expect(guard).toBe(matchesUrlPattern)
+    })
+  })
+
+  describe('normalizeTransformParams', () => {
+    it('clears both dimensions when any provided dimension fails validation', () => {
+      expect(normalizeTransformParams({ width: '500', height: '600' }, 500)).toMatchObject({
+        width: null,
+        height: null,
+      })
+      expect(normalizeTransformParams({ width: '500', height: '600' }, undefined, [500])).toMatchObject({
+        width: null,
+        height: null,
+      })
+      expect(normalizeTransformParams({ width: 'abc', height: '500' })).toMatchObject({
+        width: null,
+        height: null,
+      })
+    })
+
+    it('keeps a single valid dimension when the other is omitted or empty', () => {
+      expect(normalizeTransformParams({ width: '500' }, 500)).toMatchObject({
+        width: 500,
+        height: null,
+      })
+      expect(normalizeTransformParams({ width: '500', height: '' }, 500)).toMatchObject({
+        width: 500,
+        height: null,
+      })
     })
   })
 })

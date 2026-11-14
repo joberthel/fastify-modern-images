@@ -36,11 +36,12 @@ const VALID_POSITION_VALUES = new Set<string>([
 const HEX_COLOR_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
 // Legacy comma-separated rgb()/rgba() (matching numeric or percentage channels)
 // and hsl()/hsla() with optional 0..1 alpha values.
-const NUM_RE = String.raw`\d{1,3}(?:\.\d+)?`
-const PCT_RE = String.raw`\d{1,3}(?:\.\d+)?%`
+const RGB_NUM_RE = String.raw`(?:255(?:\.0+)?|(?:25[0-4]|2[0-4]\d|[01]?\d{1,2})(?:\.\d+)?)`
+const HUE_RE = String.raw`(?:360(?:\.0+)?|(?:3[0-5]\d|[12]\d{2}|\d{1,2})(?:\.\d+)?)`
+const PCT_RE = String.raw`(?:100(?:\.0+)?|\d{1,2}(?:\.\d+)?)%`
 const ALPHA_RE = String.raw`(?:0(?:\.\d+)?|1(?:\.0+)?|\.\d+)`
 const FUNC_COLOR_RE = new RegExp(
-  `^(?:rgba?\\(\\s*(?:${NUM_RE}\\s*,\\s*${NUM_RE}\\s*,\\s*${NUM_RE}|${PCT_RE}\\s*,\\s*${PCT_RE}\\s*,\\s*${PCT_RE})(?:\\s*,\\s*${ALPHA_RE})?\\s*\\)|hsla?\\(\\s*${NUM_RE}\\s*,\\s*${PCT_RE}\\s*,\\s*${PCT_RE}(?:\\s*,\\s*${ALPHA_RE})?\\s*\\))$`,
+  `^(?:rgba?\\(\\s*(?:${RGB_NUM_RE}\\s*,\\s*${RGB_NUM_RE}\\s*,\\s*${RGB_NUM_RE}|${PCT_RE}\\s*,\\s*${PCT_RE}\\s*,\\s*${PCT_RE})(?:\\s*,\\s*${ALPHA_RE})?\\s*\\)|hsla?\\(\\s*${HUE_RE}\\s*,\\s*${PCT_RE}\\s*,\\s*${PCT_RE}(?:\\s*,\\s*${ALPHA_RE})?\\s*\\))$`,
   'i',
 )
 
@@ -79,7 +80,7 @@ export function parseTrim(value?: unknown): boolean {
     return false
   }
   const normalized = value.trim().toLowerCase()
-  return normalized !== 'false' && normalized !== '0'
+  return normalized === '' || normalized === 'true' || normalized === '1'
 }
 
 export function parseDimension(
@@ -169,9 +170,17 @@ export function normalizeTransformParams(
   maxDimension?: number,
   allowedDimensions?: number[],
 ): NormalizedTransformParams {
+  const rawWidth = query.width ?? query.w
+  const rawHeight = query.height ?? query.h
+  const parsedWidth = parseDimension(rawWidth, maxDimension, allowedDimensions)
+  const parsedHeight = parseDimension(rawHeight, maxDimension, allowedDimensions)
+  const hasInvalidDimension
+    = (isNonEmptyString(rawWidth) && parsedWidth === null)
+      || (isNonEmptyString(rawHeight) && parsedHeight === null)
+
   return {
-    width: parseDimension(query.width ?? query.w, maxDimension, allowedDimensions),
-    height: parseDimension(query.height ?? query.h, maxDimension, allowedDimensions),
+    width: hasInvalidDimension ? null : parsedWidth,
+    height: hasInvalidDimension ? null : parsedHeight,
     fit: parseFit(query.fit ?? query.f),
     position: parsePosition(query.position ?? query.p),
     background: parseBackground(query.background ?? query.b),
