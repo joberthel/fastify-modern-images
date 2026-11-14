@@ -70,6 +70,8 @@ export interface RembgOptions {
 }
 
 export interface ResolvedFastifyModernImagesOptions {
+  urlPattern: RegExp
+  /** Backwards-compatible alias for `urlPattern`. */
   regex: RegExp
   quality: string | number
   maxDimension: number
@@ -85,6 +87,8 @@ export interface ResolvedFastifyModernImagesOptions {
 export type FastifyModernImagesOptionsCompression = Partial<CompressionConfig>
 
 export interface FastifyModernImagesOptions {
+  urlPattern?: RegExp
+  /** Backwards-compatible alias for `urlPattern`. */
   regex?: RegExp
   quality?: string | number
   maxDimension?: number

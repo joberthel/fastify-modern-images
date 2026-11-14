@@ -4,8 +4,9 @@ import { spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { PassThrough, Stream } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
+import { resolveOptions } from '../src/config'
 import { computeDerivedEtag, matchesIfNoneMatch } from '../src/negotiation'
-import { appendVaryHeader, deepMerge, getBestFormat, guard, isMediaTypeAccepted, isStream, removeBackground, validatePayload } from '../src/utils'
+import { appendVaryHeader, deepMerge, getBestFormat, guard, isMediaTypeAccepted, isStream, matchesUrlPattern, removeBackground, validatePayload } from '../src/utils'
 
 vi.mock('node:child_process', () => ({
   spawn: vi.fn(),
@@ -56,19 +57,33 @@ function createFormats(): CompressionConfig[] {
   ]
 }
 
-describe('utils - stream and guard', () => {
-  it('should guard by url', () => {
-    expect(guard(/\/foo-bar/, '/foo-bar/hello-world.jpg')).toBe(true)
-    expect(guard(/\/foo-bar/, '/bar-foo/hello-world.jpg')).toBe(false)
-    expect(guard(/\/foo-bar/, undefined)).toBe(false)
+describe('utils - stream and matchesUrlPattern', () => {
+  it('should match url pattern', () => {
+    expect(matchesUrlPattern(/\/foo-bar/, '/foo-bar/hello-world.jpg')).toBe(true)
+    expect(matchesUrlPattern(/\/foo-bar/, '/bar-foo/hello-world.jpg')).toBe(false)
+    expect(matchesUrlPattern(/\/foo-bar/, undefined)).toBe(false)
 
     const globalRegex = /\/foo-bar/g
-    expect(guard(globalRegex, '/foo-bar/hello-world.jpg')).toBe(true)
-    expect(guard(globalRegex, '/foo-bar/hello-world.jpg')).toBe(true)
+    expect(matchesUrlPattern(globalRegex, '/foo-bar/hello-world.jpg')).toBe(true)
+    expect(matchesUrlPattern(globalRegex, '/foo-bar/hello-world.jpg')).toBe(true)
 
     const stickyRegex = /\/foo-bar/y
-    expect(guard(stickyRegex, '/foo-bar/hello-world.jpg')).toBe(true)
-    expect(guard(stickyRegex, '/foo-bar/hello-world.jpg')).toBe(true)
+    expect(matchesUrlPattern(stickyRegex, '/foo-bar/hello-world.jpg')).toBe(true)
+    expect(matchesUrlPattern(stickyRegex, '/foo-bar/hello-world.jpg')).toBe(true)
+
+    expect(guard).toBe(matchesUrlPattern)
+  })
+
+  it('should resolve urlPattern and legacy regex options', () => {
+    const pattern = /^\/images\//
+    const fromUrlPattern = resolveOptions({ urlPattern: pattern })
+    expect(fromUrlPattern.urlPattern).toBe(pattern)
+    expect(fromUrlPattern.regex).toBe(pattern)
+
+    const legacyRegex = /^\/media\//
+    const fromRegex = resolveOptions({ regex: legacyRegex })
+    expect(fromRegex.urlPattern).toBe(legacyRegex)
+    expect(fromRegex.regex).toBe(legacyRegex)
   })
 
   it('should validate payload', () => {

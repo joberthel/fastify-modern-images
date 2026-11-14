@@ -3,8 +3,9 @@ import type { Buffer } from 'node:buffer'
 import type { FastifyModernImagesOptions, MinifyRequest } from './types'
 import fp from 'fastify-plugin'
 import { resolveOptions } from './config'
-import { guard, validatePayload } from './negotiation'
+import { validatePayload } from './negotiation'
 import { processedReplies, processPayload } from './pipeline'
+import { matchesUrlPattern } from './validation'
 
 async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModernImagesOptions) {
   const options = resolveOptions(opts)
@@ -16,7 +17,7 @@ async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModern
       processedReplies.has(reply)
       || request.method !== 'GET'
       || reply.statusCode !== 200
-      || !guard(options.regex, request.raw.url)
+      || !matchesUrlPattern(options.urlPattern, request.raw.url)
       || !validatePayload(reply.getHeader('Content-Type'), contentTypes, payload)
     ) {
       return payload

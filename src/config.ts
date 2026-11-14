@@ -5,6 +5,7 @@ import { MAX_DIMENSION } from './validation'
 export const DEFAULT_MAX_INPUT_BYTES = 50 * 1024 * 1024
 
 export const defaults: ResolvedFastifyModernImagesOptions = {
+  urlPattern: /.*/,
   regex: /.*/,
   quality: '7',
   maxDimension: MAX_DIMENSION,
@@ -156,5 +157,12 @@ export function deepMerge<T extends object>(
 }
 
 export function resolveOptions(opts: FastifyModernImagesOptions): ResolvedFastifyModernImagesOptions {
-  return deepMerge(defaults, opts)
+  const resolved = deepMerge(defaults, opts)
+  if (opts.urlPattern !== undefined) {
+    resolved.regex = opts.urlPattern
+  }
+  else if (opts.regex !== undefined) {
+    resolved.urlPattern = opts.regex
+  }
+  return resolved
 }

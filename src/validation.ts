@@ -151,3 +151,11 @@ export function parseQuality(
   }
   return undefined
 }
+
+export function matchesUrlPattern(pattern: RegExp, urlPath: string = '/'): boolean {
+  pattern.lastIndex = 0
+  return pattern.test(urlPath)
+}
+
+/** Backwards-compatible alias for `matchesUrlPattern`. */
+export const guard = matchesUrlPattern

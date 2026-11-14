@@ -5,11 +5,6 @@ import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { parseBackground, parseDimension, parseFit, parsePosition, parseRotation, parseTrim } from './validation'
 
-export function guard(regex: RegExp, path: string = '/'): boolean {
-  regex.lastIndex = 0
-  return regex.test(path)
-}
-
 export function isStream(stream: unknown): stream is Stream {
   return stream !== null && typeof stream === 'object' && 'pipe' in stream && typeof stream.pipe === 'function'
 }
