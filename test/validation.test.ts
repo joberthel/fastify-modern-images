@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  guard,
   isNonEmptyString,
+  matchesUrlPattern,
   MAX_DIMENSION,
   parseBackground,
   parseDimension,
@@ -178,6 +180,24 @@ describe('validation helpers', () => {
       expect(parseTrim('FALSE')).toBe(false)
       expect(parseTrim('0')).toBe(false)
       expect(parseTrim(['true'])).toBe(false)
+    })
+  })
+
+  describe('matchesUrlPattern', () => {
+    it('should match url pattern', () => {
+      expect(matchesUrlPattern(/\/foo-bar/, '/foo-bar/hello-world.jpg')).toBe(true)
+      expect(matchesUrlPattern(/\/foo-bar/, '/bar-foo/hello-world.jpg')).toBe(false)
+      expect(matchesUrlPattern(/\/foo-bar/, undefined)).toBe(false)
+
+      const globalRegex = /\/foo-bar/g
+      expect(matchesUrlPattern(globalRegex, '/foo-bar/hello-world.jpg')).toBe(true)
+      expect(matchesUrlPattern(globalRegex, '/foo-bar/hello-world.jpg')).toBe(true)
+
+      const stickyRegex = /\/foo-bar/y
+      expect(matchesUrlPattern(stickyRegex, '/foo-bar/hello-world.jpg')).toBe(true)
+      expect(matchesUrlPattern(stickyRegex, '/foo-bar/hello-world.jpg')).toBe(true)
+
+      expect(guard).toBe(matchesUrlPattern)
     })
   })
 })
