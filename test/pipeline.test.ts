@@ -1,3 +1,4 @@
+import type { CoalescedPipelineResult } from '../src/pipeline'
 import { Buffer } from 'node:buffer'
 import { PassThrough } from 'node:stream'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -201,5 +202,218 @@ describe('pipeline - 304 Not Modified short-circuit', () => {
     expect(removeBackgroundMock).toHaveBeenCalledTimes(1)
     expect(request.log.warn).toHaveBeenCalledTimes(1)
     expect(result).toBe(inputBuffer)
+  })
+})
+
+describe('pipeline - request coalescing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  function createMockReply(upstreamEtag?: string) {
+    const headers = new Map<string, unknown>()
+    if (upstreamEtag !== undefined) {
+      headers.set('etag', upstreamEtag)
+    }
+    headers.set('content-type', 'image/jpeg')
+
+    return {
+      code: vi.fn().mockReturnThis(),
+      header: vi.fn((key: string, val: unknown) => {
+        headers.set(key.toLowerCase(), val)
+      }),
+      getHeader: vi.fn((key: string) => headers.get(key.toLowerCase())),
+      removeHeader: vi.fn((key: string) => {
+        headers.delete(key.toLowerCase())
+      }),
+      headers,
+    }
+  }
+
+  function createDeferred<T>() {
+    let resolve!: (value: T) => void
+    const promise = new Promise<T>((res) => {
+      resolve = res
+    })
+    return { promise, resolve }
+  }
+
+  it('coalesces equivalent queries (/test.jpg?w=100 and /test.jpg?width=100) into a single transform/encode call', async () => {
+    const options = resolveOptions({})
+    const inFlight = new Map<string, Promise<CoalescedPipelineResult>>()
+    const inputBuffer = Buffer.from('same-image-bytes')
+    const encodedBuffer = Buffer.from('encoded-avif')
+
+    const toBufferDeferred = createDeferred<Buffer>()
+    const toFormatMock = vi.fn().mockReturnValue({
+      toBuffer: vi.fn().mockReturnValue(toBufferDeferred.promise),
+    })
+    sharpMock.mockReturnValue({
+      metadata: vi.fn().mockResolvedValue({ width: 200, height: 200, format: 'jpeg' }),
+      rotate: vi.fn().mockReturnThis(),
+      resize: vi.fn().mockReturnThis(),
+      toFormat: toFormatMock,
+    })
+
+    const req1 = {
+      raw: { url: '/test.jpg?w=100' },
+      headers: { accept: 'image/avif,image/webp,*/*' },
+      query: { w: '100' },
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+    const req2 = {
+      raw: { url: '/test.jpg?width=100' },
+      headers: { accept: 'image/avif,image/webp,*/*' },
+      query: { width: '100' },
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+
+    const p1 = processPayload(req1 as never, createMockReply() as never, inputBuffer, options, inFlight)
+    const p2 = processPayload(req2 as never, createMockReply() as never, inputBuffer, options, inFlight)
+
+    await vi.waitFor(() => {
+      expect(toFormatMock).toHaveBeenCalledTimes(1)
+    })
+
+    toBufferDeferred.resolve(encodedBuffer)
+    const [res1, res2] = await Promise.all([p1, p2])
+
+    expect(sharpMock).toHaveBeenCalledTimes(1)
+    expect(toFormatMock).toHaveBeenCalledTimes(1)
+    expect(res1).toBe(encodedBuffer)
+    expect(res2).toBe(encodedBuffer)
+    expect(inFlight.size).toBe(0)
+  })
+
+  it('does not collide in inFlight when same URL has different inputBuffers or different upstream ETags', async () => {
+    const options = resolveOptions({})
+    const inFlight = new Map<string, Promise<CoalescedPipelineResult>>()
+
+    const bufferA = Buffer.from('user-a-avatar')
+    const bufferB = Buffer.from('user-b-avatar')
+    const encodedA = Buffer.from('encoded-a')
+    const encodedB = Buffer.from('encoded-b')
+
+    const deferredA = createDeferred<Buffer>()
+    const deferredB = createDeferred<Buffer>()
+
+    let callCount = 0
+    sharpMock.mockImplementation(() => {
+      callCount++
+      const targetPromise = callCount === 1
+        ? deferredA.promise
+        : deferredB.promise
+      return {
+        metadata: vi.fn().mockResolvedValue({ width: 100, height: 100, format: 'jpeg' }),
+        rotate: vi.fn().mockReturnThis(),
+        resize: vi.fn().mockReturnThis(),
+        toFormat: vi.fn().mockReturnValue({
+          toBuffer: vi.fn().mockReturnValue(targetPromise),
+        }),
+      }
+    })
+
+    const reqA = {
+      raw: { url: '/user/avatar?w=100' },
+      headers: { accept: 'image/avif' },
+      query: { w: '100' },
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+    const reqB = {
+      raw: { url: '/user/avatar?w=100' },
+      headers: { accept: 'image/avif' },
+      query: { w: '100' },
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+
+    const pA = processPayload(reqA as never, createMockReply() as never, bufferA, options, inFlight)
+    const pB = processPayload(reqB as never, createMockReply() as never, bufferB, options, inFlight)
+
+    await vi.waitFor(() => {
+      expect(sharpMock).toHaveBeenCalledTimes(2)
+    })
+
+    deferredA.resolve(encodedA)
+    deferredB.resolve(encodedB)
+
+    const [resA, resB] = await Promise.all([pA, pB])
+    expect(resA).toBe(encodedA)
+    expect(resB).toBe(encodedB)
+    expect(inFlight.size).toBe(0)
+  })
+
+  it('coalesces removeBackground for concurrent identical requests with ?ai=...', async () => {
+    const options = resolveOptions({
+      rembg: { enabled: true },
+    })
+    const inFlight = new Map<string, Promise<CoalescedPipelineResult>>()
+    const inputBuffer = Buffer.from('raw-photo')
+    const rembgBuffer = Buffer.from('rembg-png')
+    const encodedBuffer = Buffer.from('encoded-avif')
+
+    const rembgDeferred = createDeferred<Buffer>()
+    removeBackgroundMock.mockReturnValue(rembgDeferred.promise)
+
+    sharpMock.mockReturnValue({
+      metadata: vi.fn().mockResolvedValue({ width: 100, height: 100, format: 'png' }),
+      rotate: vi.fn().mockReturnThis(),
+      resize: vi.fn().mockReturnThis(),
+      toFormat: vi.fn().mockReturnValue({
+        toBuffer: vi.fn().mockResolvedValue(encodedBuffer),
+      }),
+    })
+
+    const req1 = {
+      raw: { url: '/photo.png?ai=u2net' },
+      headers: { accept: 'image/avif' },
+      query: { ai: 'u2net' },
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+    const req2 = {
+      raw: { url: '/photo.png?a=u2net' },
+      headers: { accept: 'image/avif' },
+      query: { a: 'u2net' },
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+
+    const p1 = processPayload(req1 as never, createMockReply('"etag-1"') as never, inputBuffer, options, inFlight)
+    const p2 = processPayload(req2 as never, createMockReply('"etag-1"') as never, inputBuffer, options, inFlight)
+
+    await vi.waitFor(() => {
+      expect(removeBackgroundMock).toHaveBeenCalledTimes(1)
+    })
+
+    rembgDeferred.resolve(rembgBuffer)
+    const [res1, res2] = await Promise.all([p1, p2])
+
+    expect(removeBackgroundMock).toHaveBeenCalledTimes(1)
+    expect(sharpMock).toHaveBeenCalledTimes(1)
+    expect(res1).toBe(encodedBuffer)
+    expect(res2).toBe(encodedBuffer)
+    expect(inFlight.size).toBe(0)
   })
 })

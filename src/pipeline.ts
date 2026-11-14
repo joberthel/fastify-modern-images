@@ -3,6 +3,7 @@ import type { ConcurrencyLimiter } from './providers/rembg'
 import type { CompressionConfig, ImageTransformRequest, ResolvedFastifyModernImagesOptions } from './types'
 import type { NormalizedTransformParams } from './validation'
 import { Buffer } from 'node:buffer'
+import { createHash } from 'node:crypto'
 import sharp from 'sharp'
 import { appendVaryHeader, computeDerivedEtag, getBestFormat, isStream, matchesIfNoneMatch } from './negotiation'
 import { removeBackground, validateRembgModel } from './providers/rembg'
@@ -83,37 +84,63 @@ async function readInputBuffer(
   return inputBuffer
 }
 
-interface EncodeContext {
-  format: CompressionConfig
-  options: ResolvedFastifyModernImagesOptions
-  inputLength: number
-  quality: number | undefined
-  derivedEtag: string | undefined
-  params: NormalizedTransformParams
+export type CoalescedPipelineResult
+  = | {
+    status: 'ok'
+    output: Buffer
+    format: CompressionConfig
+    quality: number | undefined
+    derivedEtag: string | undefined
+  }
+  | {
+    status: 'no-format'
+  }
+
+function buildCoalescingKey(
+  request: FastifyRequest<ImageTransformRequest>,
+  inputBuffer: Buffer,
+  upstreamEtag: unknown,
+  compressionList: CompressionConfig[],
+  accept: string,
+  params: NormalizedTransformParams,
+  aiModel: string | undefined,
+): string {
+  const rawUrl = request.raw?.url ?? ''
+  const queryIndex = rawUrl.indexOf('?')
+  const pathname = queryIndex === -1
+    ? rawUrl
+    : rawUrl.slice(0, queryIndex)
+  const inputIdentity = typeof upstreamEtag === 'string' && upstreamEtag.length > 0
+    ? `etag:${upstreamEtag}`
+    : `sha256:${createHash('sha256').update(inputBuffer).digest('hex')}`
+  const acceptedFormats = compressionList
+    .filter(item => item.enabled && item.supported(accept))
+    .map(item => item.format)
+    .join(',')
+  const rawQuality = String(request.query.quality ?? request.query.q ?? '')
+
+  return [
+    pathname,
+    inputIdentity,
+    acceptedFormats,
+    JSON.stringify(params),
+    aiModel ?? '',
+    rawQuality,
+  ].join('|')
 }
 
-async function encodeWithCoalescing(
-  instance: sharp.Sharp,
-  request: FastifyRequest<ImageTransformRequest>,
-  format: CompressionConfig,
-  quality: number | undefined,
-  options: ResolvedFastifyModernImagesOptions,
-  params: NormalizedTransformParams,
-  inFlight?: Map<string, Promise<Buffer>>,
-): Promise<Buffer> {
-  const runEncode = async (): Promise<Buffer> => {
-    applySharpTransforms(instance, params, options)
-    return instance.toFormat(format.format, { ...format.options, quality }).toBuffer()
-  }
-
+async function coalesceTransformAndEncode(
+  key: string,
+  runTransformAndEncode: () => Promise<CoalescedPipelineResult>,
+  inFlight?: Map<string, Promise<CoalescedPipelineResult>>,
+): Promise<CoalescedPipelineResult> {
   if (!inFlight) {
-    return runEncode()
+    return runTransformAndEncode()
   }
 
-  const key = `${request.raw.url ?? ''}:${format.format}:${String(quality ?? '')}`
   let promise = inFlight.get(key)
   if (!promise) {
-    promise = runEncode()
+    promise = runTransformAndEncode()
     inFlight.set(key, promise)
   }
 
@@ -127,16 +154,15 @@ async function encodeWithCoalescing(
   }
 }
 
-async function encodeAndReply(
-  instance: sharp.Sharp,
+function sendEncodedReply(
   request: FastifyRequest<ImageTransformRequest>,
   reply: FastifyReply,
-  context: EncodeContext,
-  inFlight?: Map<string, Promise<Buffer>>,
-): Promise<Buffer> {
-  const { format, options, inputLength, quality, derivedEtag, params } = context
-  const output = await encodeWithCoalescing(instance, request, format, quality, options, params, inFlight)
-
+  output: Buffer,
+  format: CompressionConfig,
+  quality: number | undefined,
+  inputLength: number,
+  derivedEtag: string | undefined,
+): Buffer {
   const inputType = String(reply.getHeader('Content-Type') ?? '')
   const reduction = inputLength > 0
     ? Math.round((1 - output.length / inputLength) * 100)
@@ -218,7 +244,7 @@ export async function processPayload(
   reply: FastifyReply,
   payload: unknown,
   options: ResolvedFastifyModernImagesOptions,
-  inFlight?: Map<string, Promise<Buffer>>,
+  inFlight?: Map<string, Promise<CoalescedPipelineResult>>,
   rembgLimiter?: ConcurrencyLimiter,
 ): Promise<unknown> {
   const compressionList: CompressionConfig[] = Object.values(options.compression)
@@ -258,64 +284,84 @@ export async function processPayload(
   const inputBuffer = await readInputBuffer(payload, options.maxInputBytes)
   const inputLength = inputBuffer.length
 
+  const key = buildCoalescingKey(
+    request,
+    inputBuffer,
+    upstreamEtag,
+    compressionList,
+    accept,
+    params,
+    aiModel,
+  )
+
   try {
-    const buffer = aiModel !== undefined
-      ? await removeBackground(inputBuffer, aiModel, {
-          allowedModels: options.rembg.allowedModels,
-          timeoutMs: options.rembg.timeoutMs,
-          concurrency: options.rembg.concurrency,
-          limiter: rembgLimiter,
-          endpoint: options.rembg.endpoint,
-          maxOutputBytes: options.maxInputBytes,
-        })
-      : inputBuffer
+    const result = await coalesceTransformAndEncode(key, async () => {
+      const buffer = aiModel !== undefined
+        ? await removeBackground(inputBuffer, aiModel, {
+            allowedModels: options.rembg.allowedModels,
+            timeoutMs: options.rembg.timeoutMs,
+            concurrency: options.rembg.concurrency,
+            limiter: rembgLimiter,
+            endpoint: options.rembg.endpoint,
+            maxOutputBytes: options.maxInputBytes,
+          })
+        : inputBuffer
 
-    const instance = sharp(buffer, options.sharpInputOptions)
+      const instance = sharp(buffer, options.sharpInputOptions)
 
-    if (params.trim) {
-      instance.trim()
-    }
+      if (params.trim) {
+        instance.trim()
+      }
 
-    const metadata = await instance.metadata()
-    const pixelLimit = options.sharpInputOptions?.limitInputPixels
-    if (
-      typeof pixelLimit === 'number'
-      && pixelLimit > 0
-      && metadata.width !== undefined
-      && metadata.height !== undefined
-      && metadata.width * metadata.height > pixelLimit
-    ) {
-      throw new InputLimitExceededError(
-        `Input image exceeds pixel limit (${metadata.width * metadata.height} > ${pixelLimit})`,
-      )
-    }
-    const flattened = isNonEmptyString(params.background)
-    const format = getBestFormat(accept, metadata, compressionList, flattened)
+      const metadata = await instance.metadata()
+      const pixelLimit = options.sharpInputOptions?.limitInputPixels
+      if (
+        typeof pixelLimit === 'number'
+        && pixelLimit > 0
+        && metadata.width !== undefined
+        && metadata.height !== undefined
+        && metadata.width * metadata.height > pixelLimit
+      ) {
+        throw new InputLimitExceededError(
+          `Input image exceeds pixel limit (${metadata.width * metadata.height} > ${pixelLimit})`,
+        )
+      }
+      const flattened = isNonEmptyString(params.background)
+      const format = getBestFormat(accept, metadata, compressionList, flattened)
 
-    if (format === undefined) {
+      if (format === undefined) {
+        return { status: 'no-format' }
+      }
+
+      const quality = parseQuality(request.query.quality ?? request.query.q, format.quality, options.quality)
+      const derivedEtag = typeof upstreamEtag === 'string' && upstreamEtag.length > 0
+        ? computeDerivedEtag(upstreamEtag, format.format, quality, params, aiModel)
+        : undefined
+
+      applySharpTransforms(instance, params, options)
+      const output = await instance.toFormat(format.format, { ...format.options, quality }).toBuffer()
+
+      return {
+        status: 'ok',
+        output,
+        format,
+        quality,
+        derivedEtag,
+      }
+    }, inFlight)
+
+    if (result.status === 'no-format') {
       const inputType = String(reply.getHeader('Content-Type') ?? '')
       request.log.warn(`No adequate format for image of type "${inputType}" was found.`)
       return inputBuffer
     }
 
-    const quality = parseQuality(request.query.quality ?? request.query.q, format.quality, options.quality)
-    const upstreamEtag = reply.getHeader('etag')
-    const derivedEtag = typeof upstreamEtag === 'string' && upstreamEtag.length > 0
-      ? computeDerivedEtag(upstreamEtag, format.format, quality, params, aiModel)
-      : undefined
-
+    const { output, format, quality, derivedEtag } = result
     if (derivedEtag !== undefined && matchesIfNoneMatch(request.headers['if-none-match'], derivedEtag)) {
       return sendNotModified(reply, derivedEtag)
     }
 
-    return await encodeAndReply(instance, request, reply, {
-      format,
-      options,
-      inputLength,
-      quality,
-      derivedEtag,
-      params,
-    }, inFlight)
+    return sendEncodedReply(request, reply, output, format, quality, inputLength, derivedEtag)
   }
   catch (err) {
     if (isFatalInputLimitError(err)) {

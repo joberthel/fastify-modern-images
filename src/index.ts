@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import type { Buffer } from 'node:buffer'
+import type { CoalescedPipelineResult } from './pipeline'
 import type { FastifyModernImagesOptions, ImageTransformRequest } from './types'
 import fp from 'fastify-plugin'
 import { resolveOptions } from './config'
@@ -11,7 +11,7 @@ import { matchesUrlPattern } from './validation'
 async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModernImagesOptions) {
   const options = resolveOptions(opts)
   const contentTypes = Object.values(options.compression).map(item => item.contentType)
-  const inFlight = new Map<string, Promise<Buffer>>()
+  const inFlight = new Map<string, Promise<CoalescedPipelineResult>>()
   const rembgLimiter = createConcurrencyLimiter(options.rembg.concurrency)
 
   fastify.addHook('onSend', async (request: FastifyRequest<ImageTransformRequest>, reply, payload) => {
