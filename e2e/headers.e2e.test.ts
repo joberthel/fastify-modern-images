@@ -35,6 +35,7 @@ describe('response headers', () => {
     expect(res.statusCode).toBe(200)
     expect(res.headers['content-type']).toBe('image/webp')
     expect(res.headers.etag).toBeUndefined()
+    expect(res.headers['accept-ranges']).toBeUndefined()
   })
 
   it('removes stale ETag header on transformed AVIF response', async () => {
@@ -70,5 +71,34 @@ describe('response headers', () => {
     expect(res.headers['content-type']).toBe('image/jpeg')
     expect(res.headers.etag).toBeDefined()
     await passthroughServer.close()
+  })
+
+  it('skips 206 Partial Content byte-range responses', async () => {
+    const res = await server.inject({
+      method: 'GET',
+      url: '/test.jpg',
+      headers: {
+        accept: 'image/webp',
+        range: 'bytes=0-1023',
+      },
+    })
+
+    expect(res.statusCode).toBe(206)
+    expect(res.headers['content-type']).toBe('image/jpeg')
+    expect(res.headers['content-range']).toMatch(/^bytes 0-1023\//)
+    expect(res.rawPayload.length).toBe(1024)
+  })
+
+  it('skips non-GET requests', async () => {
+    const res = await server.inject({
+      method: 'HEAD',
+      url: '/test.jpg',
+      headers: {
+        accept: 'image/webp',
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['content-type']).toBe('image/jpeg')
   })
 })

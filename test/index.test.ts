@@ -32,6 +32,7 @@ async function registerPlugin(opts = {}): Promise<OnSendHook> {
 
 function createRequest(overrides: Record<string, unknown> = {}) {
   return {
+    method: 'GET',
     raw: { url: '/image.jpg' },
     query: {},
     headers: { accept: 'image/webp' },
@@ -48,6 +49,7 @@ function createReply(contentType = 'image/jpeg') {
     ['content-type', contentType],
   ])
   return {
+    statusCode: 200,
     getHeader: vi.fn((key: string) => headers.get(key.toLowerCase())),
     header: vi.fn((key: string, val: unknown) => {
       headers.set(key.toLowerCase(), val)

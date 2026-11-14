@@ -183,6 +183,7 @@ async function encodeAndReply(
   reply.header('Content-Length', output.length)
   reply.header('Vary', appendVaryHeader(reply.getHeader('Vary'), 'Accept'))
   reply.removeHeader('etag')
+  reply.removeHeader('accept-ranges')
 
   return output
 }
@@ -219,7 +220,12 @@ async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModern
   const contentTypes = Object.values(options.compression).map(item => item.contentType)
 
   fastify.addHook('onSend', async (request: FastifyRequest<MinifyRequest>, reply, payload) => {
-    if (!guard(options.regex, request.raw.url) || !validatePayload(reply.getHeader('Content-Type'), contentTypes, payload)) {
+    if (
+      request.method !== 'GET'
+      || reply.statusCode !== 200
+      || !guard(options.regex, request.raw.url)
+      || !validatePayload(reply.getHeader('Content-Type'), contentTypes, payload)
+    ) {
       return payload
     }
 
