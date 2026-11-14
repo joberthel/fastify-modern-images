@@ -1,13 +1,19 @@
 import type { FastifyInstance } from 'fastify'
+import type { Buffer } from 'node:buffer'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import fastifyStatic from '@fastify/static'
 import fastify from 'fastify'
+import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import fastifyModernImages from '../src'
 
-async function fetch(server: FastifyInstance, requestPath: string, accept = ''): Promise<string> {
+async function fetchImage(
+  server: FastifyInstance,
+  requestPath: string,
+  accept = '',
+): Promise<{ contentType: string, body: Buffer }> {
   const res = await server.inject({
     method: 'GET',
     url: requestPath,
@@ -15,11 +21,17 @@ async function fetch(server: FastifyInstance, requestPath: string, accept = ''):
       accept,
     },
   })
-  const contentType = res.headers['content-type']
-  if (typeof contentType === 'string') {
-    return contentType
+  const rawContentType = res.headers['content-type']
+  let contentType = ''
+  if (typeof rawContentType === 'string') {
+    contentType = rawContentType
   }
-  return ''
+  return { contentType, body: res.rawPayload }
+}
+
+async function fetch(server: FastifyInstance, requestPath: string, accept = ''): Promise<string> {
+  const { contentType } = await fetchImage(server, requestPath, accept)
+  return contentType
 }
 
 async function createDefaultServer(): Promise<FastifyInstance> {
@@ -52,23 +64,38 @@ describe('default behaviour - formats', () => {
   })
 
   it('should return avif', async () => {
-    expect(await fetch(server, '/test.jpg', 'image/avif,image/webp')).toBe('image/avif')
+    const { contentType, body } = await fetchImage(server, '/test.jpg', 'image/avif,image/webp')
+    expect(contentType).toBe('image/avif')
+    const meta = await sharp(body).metadata()
+    expect(meta.format).toBe('heif')
   })
 
   it('should return webp', async () => {
-    expect(await fetch(server, '/test.jpg', 'image/webp')).toBe('image/webp')
+    const { contentType, body } = await fetchImage(server, '/test.jpg', 'image/webp')
+    expect(contentType).toBe('image/webp')
+    const meta = await sharp(body).metadata()
+    expect(meta.format).toBe('webp')
   })
 
   it('should return jpeg', async () => {
-    expect(await fetch(server, '/test.jpg')).toBe('image/jpeg')
+    const { contentType, body } = await fetchImage(server, '/test.jpg')
+    expect(contentType).toBe('image/jpeg')
+    const meta = await sharp(body).metadata()
+    expect(meta.format).toBe('jpeg')
   })
 
   it('should return png', async () => {
-    expect(await fetch(server, '/test-alpha.png')).toBe('image/png')
+    const { contentType, body } = await fetchImage(server, '/test-alpha.png')
+    expect(contentType).toBe('image/png')
+    const meta = await sharp(body).metadata()
+    expect(meta.format).toBe('png')
   })
 
   it('should work with buffer', async () => {
-    expect(await fetch(server, '/buffer.jpg', 'image/avif,image/webp')).toBe('image/avif')
+    const { contentType, body } = await fetchImage(server, '/buffer.jpg', 'image/avif,image/webp')
+    expect(contentType).toBe('image/avif')
+    const meta = await sharp(body).metadata()
+    expect(meta.format).toBe('heif')
   })
 })
 
@@ -84,34 +111,89 @@ describe('default behaviour - transformations', () => {
   })
 
   it('should return jpeg with transformation', async () => {
-    expect(await fetch(server, '/test.jpg?width=150')).toBe('image/jpeg')
-    expect(await fetch(server, '/test.jpg?height=150')).toBe('image/jpeg')
-    expect(await fetch(server, '/test.jpg?width=150&height=150&fit=contain')).toBe('image/jpeg')
-    expect(await fetch(server, '/test.jpg?width=150&height=150&position=left')).toBe('image/jpeg')
+    const w150 = await fetchImage(server, '/test.jpg?width=150')
+    expect(w150.contentType).toBe('image/jpeg')
+    expect((await sharp(w150.body).metadata()).width).toBe(150)
+
+    const h150 = await fetchImage(server, '/test.jpg?height=150')
+    expect(h150.contentType).toBe('image/jpeg')
+    expect((await sharp(h150.body).metadata()).height).toBe(150)
+
+    const contain = await fetchImage(server, '/test.jpg?width=150&height=150&fit=contain')
+    expect(contain.contentType).toBe('image/jpeg')
+    const containMeta = await sharp(contain.body).metadata()
+    expect(containMeta.width).toBe(150)
+    expect(containMeta.height).toBe(150)
+
+    const posLeft = await fetchImage(server, '/test.jpg?width=150&height=150&position=left')
+    expect(posLeft.contentType).toBe('image/jpeg')
+    const posLeftMeta = await sharp(posLeft.body).metadata()
+    expect(posLeftMeta.width).toBe(150)
+    expect(posLeftMeta.height).toBe(150)
   })
 
   it('should return jpeg with transformation and background', async () => {
-    expect(await fetch(server, '/test.jpg?width=800&height=200&fit=contain&background=white')).toBe('image/jpeg')
+    const { contentType, body } = await fetchImage(server, '/test.jpg?width=800&height=200&fit=contain&background=white')
+    expect(contentType).toBe('image/jpeg')
+    const meta = await sharp(body).metadata()
+    expect(meta.width).toBe(800)
+    expect(meta.height).toBe(200)
+    const { data } = await sharp(body).raw().toBuffer({ resolveWithObject: true })
+    expect(data[0]).toBeGreaterThan(240)
+    expect(data[1]).toBeGreaterThan(240)
+    expect(data[2]).toBeGreaterThan(240)
   })
 
   it('should return jpeg with rotation', async () => {
-    expect(await fetch(server, '/test.jpg?rotation=45')).toBe('image/jpeg')
-    expect(await fetch(server, '/test.jpg?r=45')).toBe('image/jpeg')
+    const original = await fetchImage(server, '/test.jpg')
+    const originalMeta = await sharp(original.body).metadata()
+
+    for (const query of ['rotation=45', 'r=45']) {
+      const { contentType, body } = await fetchImage(server, `/test.jpg?${query}`)
+      expect(contentType).toBe('image/jpeg')
+      const meta = await sharp(body).metadata()
+      expect(meta.width).not.toBe(originalMeta.width)
+      expect(meta.height).not.toBe(originalMeta.height)
+    }
   })
 
   it('should return jpeg with rotation and background', async () => {
-    expect(await fetch(server, '/test.jpg?rotation=45&background=white')).toBe('image/jpeg')
-    expect(await fetch(server, '/test.jpg?r=45&bg=white')).toBe('image/jpeg')
+    const original = await fetchImage(server, '/test.jpg')
+    const originalMeta = await sharp(original.body).metadata()
+
+    for (const query of ['rotation=45&background=white', 'r=45&b=white']) {
+      const { contentType, body } = await fetchImage(server, `/test.jpg?${query}`)
+      expect(contentType).toBe('image/jpeg')
+      const meta = await sharp(body).metadata()
+      expect(meta.width).not.toBe(originalMeta.width)
+      const { data } = await sharp(body).raw().toBuffer({ resolveWithObject: true })
+      expect(data[0]).toBeGreaterThan(240)
+      expect(data[1]).toBeGreaterThan(240)
+      expect(data[2]).toBeGreaterThan(240)
+    }
   })
 
   it('should return jpeg with different quality', async () => {
-    expect(await fetch(server, '/test.jpg?quality=3')).toBe('image/jpeg')
-    expect(await fetch(server, '/test.jpg?q=3')).toBe('image/jpeg')
+    const original = await fetchImage(server, '/test.jpg')
+
+    for (const query of ['quality=3', 'q=3']) {
+      const { contentType, body } = await fetchImage(server, `/test.jpg?${query}`)
+      expect(contentType).toBe('image/jpeg')
+      expect(body.length).toBeLessThan(original.body.length)
+    }
   })
 
   it('should return trimmed jpeg', async () => {
-    expect(await fetch(server, '/product.jpeg?trim')).toBe('image/jpeg')
-    expect(await fetch(server, '/product.jpeg?t')).toBe('image/jpeg')
+    const original = await fetchImage(server, '/product.jpeg')
+    const originalMeta = await sharp(original.body).metadata()
+
+    for (const query of ['trim', 't']) {
+      const { contentType, body } = await fetchImage(server, `/product.jpeg?${query}`)
+      expect(contentType).toBe('image/jpeg')
+      const meta = await sharp(body).metadata()
+      expect(meta.width).toBeLessThan(originalMeta.width!)
+      expect(meta.height).toBeLessThan(originalMeta.height!)
+    }
   })
 })
 
