@@ -23,7 +23,10 @@ export function validatePayload(contentType: string | string[] | number = '', va
     return false
   }
 
-  return validContentTypes.includes(contentType) && (isStream(payload) || Buffer.isBuffer(payload))
+  const normalizedContentType = contentType.split(';', 1)[0].trim().toLowerCase()
+  const normalizedValidContentTypes = validContentTypes.map(type => type.trim().toLowerCase())
+
+  return normalizedValidContentTypes.includes(normalizedContentType) && (isStream(payload) || Buffer.isBuffer(payload))
 }
 
 export function getBestFormat(accept: string = '', metadata: Metadata, formats: FastifyModernImagesOptionsCompression[]): FastifyModernImagesOptionsCompression | false {
