@@ -19,8 +19,12 @@
   ],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "prepare": "husky",
+    "prepublishOnly": "pnpm build",
     "dev": "tsc-watch --onSuccess \"node example/server.js\"",
     "build": "tsc",
     "test": "vitest run",
