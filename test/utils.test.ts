@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { PassThrough, Stream } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import { getBestFormat, guard, isStream, removeBackground, stream2buffer, validatePayload } from '../src/utils'
+import { appendVaryHeader, getBestFormat, guard, isStream, removeBackground, stream2buffer, validatePayload } from '../src/utils'
 
 vi.mock('node:child_process', () => ({
   spawn: vi.fn(),
@@ -210,5 +210,27 @@ describe('utils - removeBackground (exit codes and signals)', () => {
     child.emit('close', 1, null)
 
     await expect(promise).rejects.toThrow('rembg exited with code 1: broken pipe')
+  })
+})
+
+describe('appendVaryHeader', () => {
+  it('returns the value when no existing Vary header is present', () => {
+    expect(appendVaryHeader(undefined, 'Accept')).toBe('Accept')
+    expect(appendVaryHeader('', 'Accept')).toBe('Accept')
+  })
+
+  it('appends to an existing string or comma-separated Vary header', () => {
+    expect(appendVaryHeader('Origin', 'Accept')).toBe('Origin, Accept')
+    expect(appendVaryHeader('Origin, Accept-Encoding', 'Accept')).toBe('Origin, Accept-Encoding, Accept')
+  })
+
+  it('appends to an existing array Vary header', () => {
+    expect(appendVaryHeader(['Origin', 'Accept-Encoding'], 'Accept')).toBe('Origin, Accept-Encoding, Accept')
+  })
+
+  it('does not duplicate Accept case-insensitively', () => {
+    expect(appendVaryHeader('Accept', 'Accept')).toBe('Accept')
+    expect(appendVaryHeader('Origin, accept', 'Accept')).toBe('Origin, accept')
+    expect(appendVaryHeader(['Origin', 'ACCEPT'], 'Accept')).toBe('Origin, ACCEPT')
   })
 })

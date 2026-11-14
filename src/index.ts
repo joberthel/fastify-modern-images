@@ -4,7 +4,7 @@ import type { FastifyModernImagesOptions, FastifyModernImagesOptionsCompression,
 import fp from 'fastify-plugin'
 import merge from 'lodash/merge'
 import sharp from 'sharp'
-import { getBestFormat, guard, isStream, removeBackground, stream2buffer, validatePayload } from './utils'
+import { appendVaryHeader, getBestFormat, guard, isStream, removeBackground, stream2buffer, validatePayload } from './utils'
 
 const defaults: FastifyModernImagesOptions = {
   regex: /.*/,
@@ -192,6 +192,7 @@ async function encodeAndReply(
     reply.header('Content-Type', format.contentType)
   }
   reply.header('Content-Length', output.length)
+  reply.header('Vary', appendVaryHeader(reply.getHeader('Vary'), 'Accept'))
 
   return output
 }

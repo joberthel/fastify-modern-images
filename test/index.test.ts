@@ -233,3 +233,76 @@ describe('immutability of defaults and format.options', () => {
     await server2.close()
   })
 })
+
+describe('vary header', () => {
+  it('sets Vary: Accept when processing an image', async () => {
+    const server = fastify()
+    server.register(fastifyModernImages)
+    server.register(fastifyStatic, {
+      root: path.join(__dirname, '../example/public'),
+      prefix: '/',
+    })
+
+    const res = await server.inject({
+      method: 'GET',
+      url: '/test.jpg',
+      headers: { accept: 'image/webp' },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['content-type']).toBe('image/webp')
+    expect(res.headers.vary).toBe('Accept')
+
+    await server.close()
+  })
+
+  it('preserves existing Vary header values without duplicating Accept', async () => {
+    const server = fastify()
+    server.register(fastifyModernImages)
+    server.register(fastifyStatic, {
+      root: path.join(__dirname, '../example/public'),
+      prefix: '/',
+    })
+
+    server.get('/with-origin.jpg', (_request, reply) => {
+      reply.header('Vary', 'Origin')
+      return reply.sendFile('test.jpg')
+    })
+    server.get('/with-accept.jpg', (_request, reply) => {
+      reply.header('Vary', 'Origin, accept')
+      return reply.sendFile('test.jpg')
+    })
+
+    const resOrigin = await server.inject({
+      method: 'GET',
+      url: '/with-origin.jpg',
+      headers: { accept: 'image/webp' },
+    })
+    expect(resOrigin.headers.vary).toBe('Origin, Accept')
+
+    const resAccept = await server.inject({
+      method: 'GET',
+      url: '/with-accept.jpg',
+      headers: { accept: 'image/webp' },
+    })
+    expect(resAccept.headers.vary).toBe('Origin, accept')
+
+    await server.close()
+  })
+
+  it('does not set Vary: Accept on passthrough responses', async () => {
+    const server = fastify()
+    server.register(fastifyModernImages)
+    server.get('/text', (_request, reply) => reply.type('text/plain').send('ok'))
+
+    const res = await server.inject({
+      method: 'GET',
+      url: '/text',
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.headers.vary).toBeUndefined()
+
+    await server.close()
+  })
+})

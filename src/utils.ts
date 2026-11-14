@@ -107,3 +107,28 @@ export async function removeBackground(input: Buffer, model = 'u2netp'): Promise
     child.stdin.end(input)
   })
 }
+
+export function appendVaryHeader(
+  existing: number | string | string[] | undefined,
+  value: string,
+): string {
+  const rawValues = existing === undefined
+    ? []
+    : Array.isArray(existing)
+      ? existing
+      : [
+          String(existing),
+        ]
+
+  const parts = rawValues
+    .flatMap(item => item.split(','))
+    .map(item => item.trim())
+    .filter(item => item.length > 0)
+
+  const target = value.toLowerCase()
+  if (!parts.some(item => item.toLowerCase() === target)) {
+    parts.push(value)
+  }
+
+  return parts.join(', ')
+}
