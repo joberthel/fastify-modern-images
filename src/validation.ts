@@ -72,6 +72,14 @@ export function isNonEmpty(value?: unknown): value is string {
   return typeof value === 'string' && value.length > 0
 }
 
+export function parseTrim(value?: unknown): boolean {
+  if (typeof value !== 'string') {
+    return false
+  }
+  const normalized = value.trim().toLowerCase()
+  return normalized !== 'false' && normalized !== '0'
+}
+
 export function parseDimension(value?: string): number | null {
   if (!isNonEmpty(value) || !/^\d+$/.test(value)) {
     return null

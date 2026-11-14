@@ -237,4 +237,21 @@ describe('fastifyModernImages unit tests - transforms and encoding', () => {
     expect(result).toBe(buf)
     expect(req.log.warn).toHaveBeenCalledWith('No adequate format for image of type "image/jpeg" was found.')
   })
+
+  it('ignores false, 0, and non-string values for trim and t', async () => {
+    const onSend = await registerPlugin()
+    for (const query of [
+      { trim: 'false' },
+      { trim: '0' },
+      { t: 'false' },
+      { t: '0' },
+      {
+        trim: ['true'] as unknown as string,
+      },
+    ]) {
+      mockSharpInstance.trim.mockClear()
+      await onSend(createRequest({ query }), createReply('image/jpeg'), Buffer.from('raw'))
+      expect(mockSharpInstance.trim).not.toHaveBeenCalled()
+    }
+  })
 })

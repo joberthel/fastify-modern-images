@@ -5,7 +5,7 @@ import { buffer as streamToBuffer } from 'node:stream/consumers'
 import fp from 'fastify-plugin'
 import sharp from 'sharp'
 import { appendVaryHeader, deepMerge, getBestFormat, guard, isMediaTypeAccepted, isStream, removeBackground, validatePayload } from './utils'
-import { isNonEmpty, parseBackground, parseDimension, parseFit, parsePosition, parseQuality, parseRotation } from './validation'
+import { isNonEmpty, parseBackground, parseDimension, parseFit, parsePosition, parseQuality, parseRotation, parseTrim } from './validation'
 
 const defaults: ResolvedFastifyModernImagesOptions = {
   regex: /.*/,
@@ -208,7 +208,7 @@ async function processPayload(
   const { buffer, inputLength } = await resolveInputBuffer(payload, request.query, options.rembg)
   const instance = sharp(buffer)
 
-  if ((request.query.trim ?? request.query.t) !== undefined) {
+  if (parseTrim(request.query.trim ?? request.query.t)) {
     instance.trim()
   }
 

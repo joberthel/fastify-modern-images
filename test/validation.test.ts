@@ -8,6 +8,7 @@ import {
   parsePosition,
   parseQuality,
   parseRotation,
+  parseTrim,
 } from '../src/validation'
 
 describe('validation helpers', () => {
@@ -145,6 +146,24 @@ describe('validation helpers', () => {
       expect(parsePosition(polluted)).toBe('centre')
       expect(parseBackground(polluted)).toBeUndefined()
       expect(parseQuality(polluted, { 7: 85 }, '7')).toBe(85)
+      expect(parseTrim(polluted)).toBe(false)
+    })
+  })
+
+  describe('parseTrim', () => {
+    it('returns true for empty string, true, 1, and other truthy strings', () => {
+      expect(parseTrim('')).toBe(true)
+      expect(parseTrim('true')).toBe(true)
+      expect(parseTrim('1')).toBe(true)
+      expect(parseTrim('yes')).toBe(true)
+    })
+
+    it('returns false for undefined, false, 0, and non-string values', () => {
+      expect(parseTrim(undefined)).toBe(false)
+      expect(parseTrim('false')).toBe(false)
+      expect(parseTrim('FALSE')).toBe(false)
+      expect(parseTrim('0')).toBe(false)
+      expect(parseTrim(['true'])).toBe(false)
     })
   })
 })

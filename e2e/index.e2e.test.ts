@@ -194,12 +194,25 @@ describe('default behaviour - transformations', () => {
     const original = await fetchImage(server, '/product.jpeg')
     const originalMeta = await sharp(original.body).metadata()
 
-    for (const query of ['trim', 't']) {
+    for (const query of ['trim', 't', 'trim=true', 'trim=1']) {
       const { contentType, body } = await fetchImage(server, `/product.jpeg?${query}`)
       expect(contentType).toBe('image/jpeg')
       const meta = await sharp(body).metadata()
       expect(meta.width).toBeLessThan(originalMeta.width!)
       expect(meta.height).toBeLessThan(originalMeta.height!)
+    }
+
+    for (const query of [
+      'trim=false',
+      'trim=0',
+      't=false',
+      't=0',
+    ]) {
+      const { contentType, body } = await fetchImage(server, `/product.jpeg?${query}`)
+      expect(contentType).toBe('image/jpeg')
+      const meta = await sharp(body).metadata()
+      expect(meta.width).toBe(originalMeta.width)
+      expect(meta.height).toBe(originalMeta.height)
     }
   })
 })
