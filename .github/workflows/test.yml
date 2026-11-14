@@ -41,14 +41,18 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Validate conventional commits
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE_SHA="${{ github.event.pull_request.base.sha }}"
-            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
             if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null || ! git cat-file -e "${HEAD_SHA}^{commit}" 2>/dev/null; then
-              git fetch --no-tags origin "${{ github.event.pull_request.base.ref }}" "refs/pull/${{ github.event.pull_request.number }}/head"
+              git fetch --no-tags origin "$BASE_REF" "refs/pull/${PR_NUMBER}/head"
             fi
-            pnpm exec commitlint --from="${BASE_SHA}" --to="${HEAD_SHA}"
+            pnpm exec commitlint --from="$BASE_SHA" --to="$HEAD_SHA"
           else
             if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
               pnpm exec commitlint --from="HEAD~1" --to="HEAD"
