@@ -294,6 +294,28 @@ export async function processPayload(
     aiModel,
   )
 
+  const controller = new AbortController()
+  const rawRequest = request.raw as {
+    on?: (event: string, listener: () => void) => void
+    off?: (event: string, listener: () => void) => void
+    removeListener?: (event: string, listener: () => void) => void
+    destroyed?: boolean
+    complete?: boolean
+  } | undefined
+
+  const onRequestClose = () => {
+    if (rawRequest?.destroyed === true || rawRequest?.complete === false || reply.raw?.writableEnded !== true) {
+      controller.abort()
+    }
+  }
+
+  if (rawRequest?.destroyed === true) {
+    controller.abort()
+  }
+  else if (typeof rawRequest?.on === 'function') {
+    rawRequest.on('close', onRequestClose)
+  }
+
   try {
     const result = await coalesceTransformAndEncode(key, async () => {
       const buffer = aiModel !== undefined
@@ -304,6 +326,7 @@ export async function processPayload(
             limiter: rembgLimiter,
             endpoint: options.rembg.endpoint,
             maxOutputBytes: options.maxInputBytes,
+            signal: controller.signal,
           })
         : inputBuffer
 
@@ -369,5 +392,13 @@ export async function processPayload(
     }
     request.log.error(err)
     return inputBuffer
+  }
+  finally {
+    if (typeof rawRequest?.off === 'function') {
+      rawRequest.off('close', onRequestClose)
+    }
+    else if (typeof rawRequest?.removeListener === 'function') {
+      rawRequest.removeListener('close', onRequestClose)
+    }
   }
 }

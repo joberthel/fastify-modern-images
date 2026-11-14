@@ -1,5 +1,6 @@
 import type { CoalescedPipelineResult } from '../src/pipeline'
 import { Buffer } from 'node:buffer'
+import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveOptions } from '../src/config'
@@ -415,5 +416,64 @@ describe('pipeline - request coalescing', () => {
     expect(res1).toBe(encodedBuffer)
     expect(res2).toBe(encodedBuffer)
     expect(inFlight.size).toBe(0)
+  })
+
+  it('aborts removeBackground signal when request.raw emits close before completion and cleans up listener', async () => {
+    const options = resolveOptions({
+      rembg: { enabled: true },
+    })
+    const inputBuffer = Buffer.from('raw-photo')
+    let rejectRembg!: (err: unknown) => void
+    const rembgPromise = new Promise<Buffer>((_resolve, reject) => {
+      rejectRembg = reject
+    })
+    let capturedSignal: AbortSignal | undefined
+
+    removeBackgroundMock.mockImplementationOnce(async (_buf: Buffer, _model: string, opts?: { signal?: AbortSignal }) => {
+      capturedSignal = opts?.signal
+      return rembgPromise
+    })
+
+    const rawReq = Object.assign(new EventEmitter(), {
+      url: '/photo.png?ai=u2net',
+      destroyed: false,
+      complete: false,
+    })
+
+    const req = {
+      raw: rawReq,
+      headers: { accept: 'image/avif' },
+      query: { ai: 'u2net' },
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+
+    const reply = {
+      ...createMockReply('"etag-1"'),
+      raw: { writableEnded: false },
+    }
+
+    const pending = processPayload(req as never, reply as never, inputBuffer, options)
+
+    await vi.waitFor(() => {
+      expect(removeBackgroundMock).toHaveBeenCalledTimes(1)
+    })
+
+    expect(capturedSignal).toBeInstanceOf(AbortSignal)
+    expect(capturedSignal?.aborted).toBe(false)
+    expect(rawReq.listenerCount('close')).toBe(1)
+
+    rawReq.destroyed = true
+    rawReq.emit('close')
+
+    expect(capturedSignal?.aborted).toBe(true)
+
+    rejectRembg(new DOMException('The operation was aborted.', 'AbortError'))
+    const result = await pending
+    expect(result).toBe(inputBuffer)
+    expect(rawReq.listenerCount('close')).toBe(0)
   })
 })
