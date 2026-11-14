@@ -198,8 +198,8 @@ describe('default behaviour - transformations', () => {
       const { contentType, body } = await fetchImage(server, `/product.jpeg?${query}`)
       expect(contentType).toBe('image/jpeg')
       const meta = await sharp(body).metadata()
-      expect(meta.width).toBeLessThan(originalMeta.width!)
-      expect(meta.height).toBeLessThan(originalMeta.height!)
+      expect(meta.width).toBeLessThan(originalMeta.width)
+      expect(meta.height).toBeLessThan(originalMeta.height)
     }
 
     for (const query of [

@@ -49,4 +49,4 @@ jobs:
       - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm publish --no-git-checks
+        run: pnpm publish --no-git-checks --provenance
