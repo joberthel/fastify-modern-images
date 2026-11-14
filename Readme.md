@@ -54,7 +54,12 @@ fastify
     sharpInputOptions: {}, // Options passed to the sharp(buffer, options) constructor (e.g. limitInputPixels, failOn, sequentialRead).
     verifyRequest: undefined, // Optional (request) => boolean | Promise<boolean> callback; returning false skips transforms and serves the original payload.
     rembg: {
-        model: 'isnet-general-use' // https://github.com/danielgatis/rembg#models
+        enabled: false, // Must be set to true to enable AI background removal (?ai / ?a).
+        model: 'isnet-general-use', // https://github.com/danielgatis/rembg#models
+        allowedModels: undefined, // Optional allowlist of permitted rembg model names.
+        timeoutMs: 30_000, // Timeout in milliseconds for rembg execution.
+        concurrency: 2, // Maximum number of concurrent rembg processes.
+        endpoint: undefined // Optional HTTP endpoint for a remote rembg service.
     },
     compression: {
         avif: {
@@ -118,10 +123,22 @@ http://localhost:3000/test.jpg?q=2
 
 ## AI Background Removal
 
-Make sure python and [rembg](https://github.com/danielgatis/rembg) is installed.
+AI background removal is disabled by default (`rembg.enabled: false`), so `?ai` / `?a` queries are ignored unless `rembg: { enabled: true }` is configured.
+
+Make sure python and [rembg](https://github.com/danielgatis/rembg) is installed (or configure `rembg.endpoint` for a remote `rembg` service).
 
 ```
 pip install rembg[cli]
+```
+
+Enable it when registering the plugin:
+
+```js
+app.register(fastifyModernImages, {
+  rembg: {
+    enabled: true,
+  },
+})
 ```
 
 Examples:
