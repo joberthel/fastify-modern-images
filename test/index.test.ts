@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer'
 import { Readable } from 'node:stream'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import fastifyModernImages from '../src/index'
-import * as utils from '../src/utils'
+import * as rembg from '../src/providers/rembg'
 
 const mockSharpInstance = {
   trim: vi.fn().mockReturnThis(),
@@ -95,7 +95,7 @@ describe('fastifyModernImages unit tests - passthrough and input', () => {
   })
 
   it('ignores ai/a query when rembg is disabled by default', async () => {
-    const spy = vi.spyOn(utils, 'removeBackground').mockResolvedValue(Buffer.from('no-bg'))
+    const spy = vi.spyOn(rembg, 'removeBackground').mockResolvedValue(Buffer.from('no-bg'))
     const onSend = await registerPlugin()
 
     await onSend(createRequest({
@@ -106,7 +106,7 @@ describe('fastifyModernImages unit tests - passthrough and input', () => {
   })
 
   it('calls removeBackground with default and custom model when rembg is enabled and ai/a query is set', async () => {
-    const spy = vi.spyOn(utils, 'removeBackground').mockResolvedValue(Buffer.from('no-bg'))
+    const spy = vi.spyOn(rembg, 'removeBackground').mockResolvedValue(Buffer.from('no-bg'))
     const onSend = await registerPlugin({
       rembg: { enabled: true, model: 'u2net' },
     })
@@ -130,7 +130,7 @@ describe('fastifyModernImages unit tests - passthrough and input', () => {
   })
 
   it('measures reduction against original inputLength before removeBackground', async () => {
-    const spy = vi.spyOn(utils, 'removeBackground').mockResolvedValue(Buffer.from('no-bg'))
+    const spy = vi.spyOn(rembg, 'removeBackground').mockResolvedValue(Buffer.from('no-bg'))
     const onSend = await registerPlugin({
       rembg: { enabled: true, model: 'u2net' },
     })
@@ -153,7 +153,7 @@ describe('fastifyModernImages unit tests - passthrough and input', () => {
   })
 
   it('ignores non-string ai/a query values (e.g. array pollution) when rembg is enabled', async () => {
-    const spy = vi.spyOn(utils, 'removeBackground').mockResolvedValue(Buffer.from('no-bg'))
+    const spy = vi.spyOn(rembg, 'removeBackground').mockResolvedValue(Buffer.from('no-bg'))
     const onSend = await registerPlugin({
       rembg: { enabled: true, model: 'u2net' },
     })
