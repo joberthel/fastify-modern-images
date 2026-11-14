@@ -5,7 +5,7 @@ import type { NormalizedTransformParams } from './validation'
 import { Buffer } from 'node:buffer'
 import sharp from 'sharp'
 import { appendVaryHeader, computeDerivedEtag, getBestFormat, isStream, matchesIfNoneMatch } from './negotiation'
-import { removeBackground } from './providers/rembg'
+import { removeBackground, validateRembgModel } from './providers/rembg'
 import { readStreamWithLimit } from './stream'
 import { isNonEmptyString, normalizeTransformParams, parseQuality } from './validation'
 
@@ -161,6 +161,58 @@ async function encodeAndReply(
   return output
 }
 
+function sendNotModified(reply: FastifyReply, etag: string): string {
+  reply.code(304)
+  reply.header('ETag', etag)
+  reply.header('Vary', appendVaryHeader(reply.getHeader('Vary'), 'Accept'))
+  reply.removeHeader('Content-Length')
+  reply.removeHeader('accept-ranges')
+  processedReplies.add(reply)
+  return ''
+}
+
+function findMatchingDerivedEtag(
+  upstreamEtag: unknown,
+  ifNoneMatch: unknown,
+  accept: string,
+  compressionList: CompressionConfig[],
+  request: FastifyRequest<ImageTransformRequest>,
+  options: ResolvedFastifyModernImagesOptions,
+  params: NormalizedTransformParams,
+  aiModel: string | undefined,
+): string | undefined {
+  if (
+    typeof upstreamEtag !== 'string'
+    || upstreamEtag.length === 0
+    || typeof ifNoneMatch !== 'string'
+    || ifNoneMatch.length === 0
+  ) {
+    return undefined
+  }
+
+  if (aiModel !== undefined) {
+    try {
+      validateRembgModel(aiModel, options.rembg.allowedModels)
+    }
+    catch {
+      return undefined
+    }
+  }
+
+  for (const item of compressionList) {
+    if (!item.enabled || !item.supported(accept)) {
+      continue
+    }
+    const quality = parseQuality(request.query.quality ?? request.query.q, item.quality, options.quality)
+    const candidateEtag = computeDerivedEtag(upstreamEtag, item.format, quality, params, aiModel)
+    if (matchesIfNoneMatch(ifNoneMatch, candidateEtag)) {
+      return candidateEtag
+    }
+  }
+
+  return undefined
+}
+
 export async function processPayload(
   request: FastifyRequest<ImageTransformRequest>,
   reply: FastifyReply,
@@ -177,16 +229,36 @@ export async function processPayload(
     return payload
   }
 
+  const params = normalizeTransformParams(request.query, options.maxDimension, options.allowedDimensions)
+  const ai = request.query.ai ?? request.query.a
+  const aiModel = options.rembg.enabled && typeof ai === 'string'
+    ? (ai.length > 0
+        ? ai
+        : options.rembg.model)
+    : undefined
+
+  const upstreamEtag = reply.getHeader('etag')
+  const earlyMatchedEtag = findMatchingDerivedEtag(
+    upstreamEtag,
+    request.headers['if-none-match'],
+    accept,
+    compressionList,
+    request,
+    options,
+    params,
+    aiModel,
+  )
+  if (earlyMatchedEtag !== undefined) {
+    if (isStream(payload)) {
+      ;(payload as { destroy?: () => void }).destroy?.()
+    }
+    return sendNotModified(reply, earlyMatchedEtag)
+  }
+
   const inputBuffer = await readInputBuffer(payload, options.maxInputBytes)
   const inputLength = inputBuffer.length
 
   try {
-    const ai = request.query.ai ?? request.query.a
-    const aiModel = options.rembg.enabled && typeof ai === 'string'
-      ? (ai.length > 0
-          ? ai
-          : options.rembg.model)
-      : undefined
     const buffer = aiModel !== undefined
       ? await removeBackground(inputBuffer, aiModel, {
           allowedModels: options.rembg.allowedModels,
@@ -199,7 +271,6 @@ export async function processPayload(
       : inputBuffer
 
     const instance = sharp(buffer, options.sharpInputOptions)
-    const params = normalizeTransformParams(request.query, options.maxDimension, options.allowedDimensions)
 
     if (params.trim) {
       instance.trim()
@@ -234,13 +305,7 @@ export async function processPayload(
       : undefined
 
     if (derivedEtag !== undefined && matchesIfNoneMatch(request.headers['if-none-match'], derivedEtag)) {
-      reply.code(304)
-      reply.header('ETag', derivedEtag)
-      reply.header('Vary', appendVaryHeader(reply.getHeader('Vary'), 'Accept'))
-      reply.removeHeader('Content-Length')
-      reply.removeHeader('accept-ranges')
-      processedReplies.add(reply)
-      return ''
+      return sendNotModified(reply, derivedEtag)
     }
 
     return await encodeAndReply(instance, request, reply, {
