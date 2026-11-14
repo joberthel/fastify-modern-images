@@ -146,6 +146,38 @@ async function removeBackgroundViaEndpoint(
   return buf
 }
 
+const SIGKILL_GRACE_MS = 5000
+
+function killChildWithFallback(child: ChildProcessWithoutNullStreams): void {
+  let killTimer: ReturnType<typeof setTimeout> | undefined
+  const clearKillTimer = () => {
+    if (killTimer !== undefined) {
+      clearTimeout(killTimer)
+      killTimer = undefined
+    }
+    child.removeListener('close', clearKillTimer)
+    child.removeListener('exit', clearKillTimer)
+  }
+
+  child.once('close', clearKillTimer)
+  child.once('exit', clearKillTimer)
+  child.kill()
+
+  killTimer = setTimeout(() => {
+    killTimer = undefined
+    child.removeListener('close', clearKillTimer)
+    child.removeListener('exit', clearKillTimer)
+    child.kill('SIGKILL')
+  }, SIGKILL_GRACE_MS)
+  killTimer.unref?.()
+}
+
+function destroyChildStreams(child: ChildProcessWithoutNullStreams): void {
+  child.stdin.destroy()
+  child.stdout.destroy()
+  child.stderr.destroy()
+}
+
 function setupAbortAndTimeout(
   child: ChildProcessWithoutNullStreams,
   fail: (err: Error) => void,
@@ -154,7 +186,7 @@ function setupAbortAndTimeout(
 ): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined
   const onAbort = () => {
-    child.kill()
+    killChildWithFallback(child)
     fail(signal?.reason instanceof Error
       ? signal.reason
       : new Error('rembg aborted'))
@@ -166,7 +198,7 @@ function setupAbortAndTimeout(
 
   if (timeoutMs !== undefined && timeoutMs > 0) {
     timer = setTimeout(() => {
-      child.kill()
+      killChildWithFallback(child)
       fail(new Error(`rembg timed out after ${timeoutMs}ms`))
     }, timeoutMs)
   }
@@ -205,6 +237,7 @@ async function removeBackgroundViaSpawn(
       if (!settled) {
         settled = true
         cleanup()
+        destroyChildStreams(child)
         reject(err)
       }
     }
@@ -213,7 +246,7 @@ async function removeBackgroundViaSpawn(
 
     const stdoutPromise = readStreamWithLimit(child.stdout, maxOutputBytes)
     stdoutPromise.catch((err: unknown) => {
-      child.kill()
+      killChildWithFallback(child)
       fail(err instanceof Error
         ? err
         : new Error(String(err)))

@@ -14,10 +14,12 @@ function createMockChildProcess() {
     stdin: PassThrough
     stdout: PassThrough
     stderr: PassThrough
+    kill: ReturnType<typeof vi.fn>
   }
   child.stdin = new PassThrough()
   child.stdout = new PassThrough()
   child.stderr = new PassThrough()
+  child.kill = vi.fn()
   return child
 }
 
@@ -138,6 +140,32 @@ describe('rembg - removeBackground (validation, timeout, concurrency, endpoint)'
 
     await expect(promise).rejects.toThrow('rembg timed out after 50ms')
     expect(killSpy).toHaveBeenCalledTimes(1)
+    expect(child.stdin.destroyed).toBe(true)
+    expect(child.stdout.destroyed).toBe(true)
+    expect(child.stderr.destroyed).toBe(true)
+
+    vi.advanceTimersByTime(5000)
+    expect(killSpy).toHaveBeenCalledTimes(2)
+    expect(killSpy).toHaveBeenLastCalledWith('SIGKILL')
+    vi.useRealTimers()
+  })
+
+  it('clears SIGKILL fallback timer if child exits before grace period on timeout', async () => {
+    vi.useFakeTimers()
+    const child = createMockChildProcess()
+    const killSpy = vi.fn()
+    Object.assign(child, { kill: killSpy })
+    vi.mocked(spawn).mockReturnValueOnce(child as never)
+
+    const promise = removeBackground(Buffer.from('input-image'), 'u2net', { timeoutMs: 50 })
+    vi.advanceTimersByTime(50)
+
+    await expect(promise).rejects.toThrow('rembg timed out after 50ms')
+    expect(killSpy).toHaveBeenCalledTimes(1)
+
+    child.emit('exit', null, 'SIGTERM')
+    vi.advanceTimersByTime(5000)
+    expect(killSpy).toHaveBeenCalledTimes(1)
     vi.useRealTimers()
   })
 
@@ -148,6 +176,7 @@ describe('rembg - removeBackground (validation, timeout, concurrency, endpoint)'
       removeBackground(Buffer.from('input-image'), 'u2net', { signal: controller.signal }),
     ).rejects.toThrow('cancelled')
 
+    vi.useFakeTimers()
     const midController = new AbortController()
     const child = createMockChildProcess()
     const killSpy = vi.fn()
@@ -159,6 +188,14 @@ describe('rembg - removeBackground (validation, timeout, concurrency, endpoint)'
 
     await expect(promise).rejects.toThrow('aborted mid-flight')
     expect(killSpy).toHaveBeenCalledTimes(1)
+    expect(child.stdin.destroyed).toBe(true)
+    expect(child.stdout.destroyed).toBe(true)
+    expect(child.stderr.destroyed).toBe(true)
+
+    vi.advanceTimersByTime(5000)
+    expect(killSpy).toHaveBeenCalledTimes(2)
+    expect(killSpy).toHaveBeenLastCalledWith('SIGKILL')
+    vi.useRealTimers()
   })
 
   it('enforces concurrency limit on removeBackground calls', async () => {
