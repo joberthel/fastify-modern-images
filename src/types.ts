@@ -1,7 +1,7 @@
 import type { FastifyRequest } from 'fastify'
 import type sharp from 'sharp'
 
-export interface MinifyQuerystring {
+export interface ImageTransformQuerystring {
   quality?: '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
   width?: string
   height?: string
@@ -32,20 +32,26 @@ export interface MinifyQuerystring {
   ai?: string
   trim?: string
   /** Shortcuts */
-  q?: MinifyQuerystring['quality']
-  w?: MinifyQuerystring['width']
-  h?: MinifyQuerystring['height']
-  f?: MinifyQuerystring['fit']
-  p?: MinifyQuerystring['position']
-  b?: MinifyQuerystring['background']
-  r?: MinifyQuerystring['rotation']
-  a?: MinifyQuerystring['ai']
-  t?: MinifyQuerystring['trim']
+  q?: ImageTransformQuerystring['quality']
+  w?: ImageTransformQuerystring['width']
+  h?: ImageTransformQuerystring['height']
+  f?: ImageTransformQuerystring['fit']
+  p?: ImageTransformQuerystring['position']
+  b?: ImageTransformQuerystring['background']
+  r?: ImageTransformQuerystring['rotation']
+  a?: ImageTransformQuerystring['ai']
+  t?: ImageTransformQuerystring['trim']
 }
 
-export interface MinifyRequest {
-  Querystring: MinifyQuerystring
+export interface ImageTransformRequest {
+  Querystring: ImageTransformQuerystring
 }
+
+/** @deprecated Use ImageTransformQuerystring instead. */
+export type MinifyQuerystring = ImageTransformQuerystring
+
+/** @deprecated Use ImageTransformRequest instead. */
+export type MinifyRequest = ImageTransformRequest
 
 export type ImageFormat = 'avif' | 'webp' | 'jpeg' | 'png'
 
@@ -81,7 +87,7 @@ export interface ResolvedFastifyModernImagesOptions {
   rembg: RembgOptions
   compression: Record<string, CompressionConfig>
   sharpInputOptions?: sharp.SharpOptions
-  verifyRequest?: (request: FastifyRequest<MinifyRequest>) => boolean | Promise<boolean>
+  verifyRequest?: (request: FastifyRequest<ImageTransformRequest>) => boolean | Promise<boolean>
 }
 
 export type FastifyModernImagesOptionsCompression = Partial<CompressionConfig>
@@ -98,5 +104,5 @@ export interface FastifyModernImagesOptions {
   rembg?: Partial<RembgOptions>
   compression?: Record<string, FastifyModernImagesOptionsCompression>
   sharpInputOptions?: sharp.SharpOptions
-  verifyRequest?: (request: FastifyRequest<MinifyRequest>) => boolean | Promise<boolean>
+  verifyRequest?: (request: FastifyRequest<ImageTransformRequest>) => boolean | Promise<boolean>
 }

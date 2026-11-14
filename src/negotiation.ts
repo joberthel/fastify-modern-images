@@ -1,6 +1,6 @@
 import type { Stream } from 'node:stream'
 import type { Metadata } from 'sharp'
-import type { CompressionConfig, MinifyQuerystring } from './types'
+import type { CompressionConfig, ImageTransformQuerystring } from './types'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { parseBackground, parseDimension, parseFit, parsePosition, parseRotation, parseTrim } from './validation'
@@ -106,7 +106,7 @@ export function computeDerivedEtag(
   upstreamEtag: string,
   format: string,
   quality: number | undefined,
-  query: MinifyQuerystring,
+  query: ImageTransformQuerystring,
   aiModel?: string,
   maxDimension?: number,
 ): string {

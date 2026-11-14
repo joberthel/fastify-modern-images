@@ -1,8 +1,8 @@
-import type { MinifyQuerystring } from './types'
+import type { ImageTransformQuerystring } from './types'
 
 export const MAX_DIMENSION = 4096
 
-const VALID_FIT_VALUES = new Set<NonNullable<MinifyQuerystring['fit']>>([
+const VALID_FIT_VALUES = new Set<NonNullable<ImageTransformQuerystring['fit']>>([
   'cover',
   'contain',
   'fill',
@@ -109,9 +109,9 @@ export function parseRotation(value?: string): number | undefined {
   return parsed
 }
 
-export function parseFit(value?: string): NonNullable<MinifyQuerystring['fit']> {
-  if (isNonEmptyString(value) && VALID_FIT_VALUES.has(value as NonNullable<MinifyQuerystring['fit']>)) {
-    return value as NonNullable<MinifyQuerystring['fit']>
+export function parseFit(value?: string): NonNullable<ImageTransformQuerystring['fit']> {
+  if (isNonEmptyString(value) && VALID_FIT_VALUES.has(value as NonNullable<ImageTransformQuerystring['fit']>)) {
+    return value as NonNullable<ImageTransformQuerystring['fit']>
   }
   return 'cover'
 }

@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import type { CompressionConfig, MinifyQuerystring, MinifyRequest, RembgOptions, ResolvedFastifyModernImagesOptions } from './types'
+import type { CompressionConfig, ImageTransformQuerystring, ImageTransformRequest, RembgOptions, ResolvedFastifyModernImagesOptions } from './types'
 import { Buffer } from 'node:buffer'
 import sharp from 'sharp'
 import { appendVaryHeader, computeDerivedEtag, getBestFormat, isStream, matchesIfNoneMatch } from './negotiation'
@@ -11,7 +11,7 @@ export const processedReplies = new WeakSet<FastifyReply>()
 
 function applyResize(
   instance: sharp.Sharp,
-  query: MinifyQuerystring,
+  query: ImageTransformQuerystring,
   options: Pick<ResolvedFastifyModernImagesOptions, 'maxDimension' | 'withoutEnlargement' | 'allowedDimensions'>,
   background?: string,
 ): void {
@@ -32,7 +32,7 @@ function applyResize(
 
 function applySharpTransforms(
   instance: sharp.Sharp,
-  query: MinifyQuerystring,
+  query: ImageTransformQuerystring,
   options: Pick<ResolvedFastifyModernImagesOptions, 'maxDimension' | 'withoutEnlargement' | 'allowedDimensions'>,
 ): void {
   const background = parseBackground(query.background ?? query.b)
@@ -50,7 +50,7 @@ function applySharpTransforms(
 
 async function resolveInputBuffer(
   payload: unknown,
-  query: MinifyQuerystring,
+  query: ImageTransformQuerystring,
   rembg: RembgOptions,
   maxInputBytes: number,
 ): Promise<{ buffer: Buffer, inputLength: number }> {
@@ -94,7 +94,7 @@ interface EncodeContext {
 
 async function encodeWithCoalescing(
   instance: sharp.Sharp,
-  request: FastifyRequest<MinifyRequest>,
+  request: FastifyRequest<ImageTransformRequest>,
   format: CompressionConfig,
   quality: number | undefined,
   options: ResolvedFastifyModernImagesOptions,
@@ -128,7 +128,7 @@ async function encodeWithCoalescing(
 
 async function encodeAndReply(
   instance: sharp.Sharp,
-  request: FastifyRequest<MinifyRequest>,
+  request: FastifyRequest<ImageTransformRequest>,
   reply: FastifyReply,
   context: EncodeContext,
   inFlight?: Map<string, Promise<Buffer>>,
@@ -161,7 +161,7 @@ async function encodeAndReply(
 }
 
 export async function processPayload(
-  request: FastifyRequest<MinifyRequest>,
+  request: FastifyRequest<ImageTransformRequest>,
   reply: FastifyReply,
   payload: unknown,
   options: ResolvedFastifyModernImagesOptions,

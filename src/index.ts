@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { Buffer } from 'node:buffer'
-import type { FastifyModernImagesOptions, MinifyRequest } from './types'
+import type { FastifyModernImagesOptions, ImageTransformRequest } from './types'
 import fp from 'fastify-plugin'
 import { resolveOptions } from './config'
 import { validatePayload } from './negotiation'
@@ -12,7 +12,7 @@ async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModern
   const contentTypes = Object.values(options.compression).map(item => item.contentType)
   const inFlight = new Map<string, Promise<Buffer>>()
 
-  fastify.addHook('onSend', async (request: FastifyRequest<MinifyRequest>, reply, payload) => {
+  fastify.addHook('onSend', async (request: FastifyRequest<ImageTransformRequest>, reply, payload) => {
     if (
       processedReplies.has(reply)
       || request.method !== 'GET'
