@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import type { ConcurrencyLimiter } from './providers/rembg'
-import type { CompressionConfig, ImageTransformQuerystring, ImageTransformRequest, RembgOptions, ResolvedFastifyModernImagesOptions } from './types'
+import type { CompressionConfig, ImageTransformRequest, ResolvedFastifyModernImagesOptions } from './types'
 import type { NormalizedTransformParams } from './validation'
 import { Buffer } from 'node:buffer'
 import sharp from 'sharp'
@@ -43,42 +43,19 @@ function applySharpTransforms(
   }
 }
 
-async function resolveInputBuffer(
+async function readInputBuffer(
   payload: unknown,
-  query: ImageTransformQuerystring,
-  rembg: RembgOptions,
   maxInputBytes: number,
-  rembgLimiter?: ConcurrencyLimiter,
-): Promise<{ buffer: Buffer, inputLength: number }> {
-  let inputBuffer: Buffer
+): Promise<Buffer> {
   if (isStream(payload)) {
-    inputBuffer = await readStreamWithLimit(payload as unknown as NodeJS.ReadableStream, maxInputBytes)
-  }
-  else {
-    inputBuffer = payload as Buffer
-    if (Buffer.isBuffer(inputBuffer) && inputBuffer.length > maxInputBytes) {
-      throw new Error(`Input buffer exceeded maximum allowed size of ${maxInputBytes} bytes`)
-    }
-  }
-  const inputLength = inputBuffer.length
-
-  const ai = query.ai ?? query.a
-  if (!rembg.enabled || typeof ai !== 'string') {
-    return { buffer: inputBuffer, inputLength }
+    return readStreamWithLimit(payload as unknown as NodeJS.ReadableStream, maxInputBytes)
   }
 
-  const model = ai.length > 0
-    ? ai
-    : rembg.model
-  const buffer = await removeBackground(inputBuffer, model, {
-    allowedModels: rembg.allowedModels,
-    timeoutMs: rembg.timeoutMs,
-    concurrency: rembg.concurrency,
-    limiter: rembgLimiter,
-    endpoint: rembg.endpoint,
-    maxOutputBytes: maxInputBytes,
-  })
-  return { buffer, inputLength }
+  const inputBuffer = payload as Buffer
+  if (Buffer.isBuffer(inputBuffer) && inputBuffer.length > maxInputBytes) {
+    throw new Error(`Input buffer exceeded maximum allowed size of ${maxInputBytes} bytes`)
+  }
+  return inputBuffer
 }
 
 interface EncodeContext {
@@ -175,9 +152,27 @@ export async function processPayload(
     return payload
   }
 
-  const { buffer, inputLength } = await resolveInputBuffer(payload, request.query, options.rembg, options.maxInputBytes, rembgLimiter)
+  const inputBuffer = await readInputBuffer(payload, options.maxInputBytes)
+  const inputLength = inputBuffer.length
 
   try {
+    const ai = request.query.ai ?? request.query.a
+    const aiModel = options.rembg.enabled && typeof ai === 'string'
+      ? (ai.length > 0
+          ? ai
+          : options.rembg.model)
+      : undefined
+    const buffer = aiModel !== undefined
+      ? await removeBackground(inputBuffer, aiModel, {
+          allowedModels: options.rembg.allowedModels,
+          timeoutMs: options.rembg.timeoutMs,
+          concurrency: options.rembg.concurrency,
+          limiter: rembgLimiter,
+          endpoint: options.rembg.endpoint,
+          maxOutputBytes: options.maxInputBytes,
+        })
+      : inputBuffer
+
     const instance = sharp(buffer, options.sharpInputOptions)
     const params = normalizeTransformParams(request.query, options.maxDimension, options.allowedDimensions)
 
@@ -196,12 +191,6 @@ export async function processPayload(
     }
 
     const quality = parseQuality(request.query.quality ?? request.query.q, format.quality, options.quality)
-    const ai = request.query.ai ?? request.query.a
-    const aiModel = options.rembg.enabled && typeof ai === 'string'
-      ? (ai.length > 0
-          ? ai
-          : options.rembg.model)
-      : undefined
     const upstreamEtag = reply.getHeader('etag')
     const derivedEtag = typeof upstreamEtag === 'string' && upstreamEtag.length > 0
       ? computeDerivedEtag(upstreamEtag, format.format, quality, params, aiModel)
@@ -231,6 +220,6 @@ export async function processPayload(
       throw err
     }
     request.log.error(err)
-    return buffer
+    return inputBuffer
   }
 }

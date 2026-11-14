@@ -146,6 +146,24 @@ describe('fastifyModernImages unit tests - passthrough and input', () => {
     spy.mockRestore()
   })
 
+  it('logs error and falls back to original buffer when removeBackground rejects', async () => {
+    const err = new Error('Invalid rembg model "../bad"')
+    const spy = vi.spyOn(rembg, 'removeBackground').mockRejectedValue(err)
+    const onSend = await registerPlugin({
+      rembg: { enabled: true, model: 'u2net' },
+    })
+
+    const request = createRequest({
+      query: { ai: '../bad' },
+    })
+    const input = Buffer.from('original-image')
+    const result = await onSend(request, createReply(), input)
+
+    expect(result).toBe(input)
+    expect(request.log.error).toHaveBeenCalledWith(err)
+    spy.mockRestore()
+  })
+
   it('logs 0% reduction when inputLength is 0', async () => {
     const onSend = await registerPlugin()
     const request = createRequest()
