@@ -95,6 +95,9 @@ export type CoalescedPipelineResult
   | {
     status: 'no-format'
   }
+  | {
+    status: 'bypass'
+  }
 
 function buildCoalescingKey(
   request: FastifyRequest<ImageTransformRequest>,
@@ -349,6 +352,9 @@ export async function processPayload(
           `Input image exceeds pixel limit (${metadata.width * metadata.height} > ${pixelLimit})`,
         )
       }
+      if (metadata.pages !== undefined && metadata.pages > 1) {
+        return { status: 'bypass' }
+      }
       const flattened = isNonEmptyString(params.background)
       const format = getBestFormat(accept, metadata, compressionList, flattened)
 
@@ -372,6 +378,10 @@ export async function processPayload(
         derivedEtag,
       }
     }, inFlight)
+
+    if (result.status === 'bypass') {
+      return inputBuffer
+    }
 
     if (result.status === 'no-format') {
       const inputType = String(reply.getHeader('Content-Type') ?? '')

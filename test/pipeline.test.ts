@@ -477,3 +477,47 @@ describe('pipeline - request coalescing', () => {
     expect(rawReq.listenerCount('close')).toBe(0)
   })
 })
+
+describe('pipeline - animated / multi-page image bypass', () => {
+  it('bypasses transformation and returns original inputBuffer when metadata.pages > 1', async () => {
+    const toFormatSpy = vi.fn()
+    sharpMock.mockImplementation(() => ({
+      metadata: vi.fn().mockResolvedValue({
+        format: 'webp',
+        width: 100,
+        height: 100,
+        pages: 3,
+      }),
+      trim: vi.fn().mockReturnThis(),
+      toFormat: toFormatSpy,
+    }))
+
+    const options = resolveOptions({})
+    const inputBuffer = Buffer.from('animated-webp-bytes')
+    const req = {
+      url: '/animated.webp',
+      headers: { accept: 'image/avif,image/webp,*/*' },
+      query: {},
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+    const reply = {
+      getHeader: vi.fn().mockReturnValue('image/webp'),
+      header: vi.fn().mockReturnThis(),
+      type: vi.fn().mockReturnThis(),
+      code: vi.fn().mockReturnThis(),
+    }
+
+    const result = await processPayload(req as never, reply as never, inputBuffer, options)
+
+    expect(result).toBe(inputBuffer)
+    expect(toFormatSpy).not.toHaveBeenCalled()
+    expect(reply.header).not.toHaveBeenCalled()
+    expect(reply.type).not.toHaveBeenCalled()
+    expect(reply.code).not.toHaveBeenCalled()
+    expect(req.log.warn).not.toHaveBeenCalled()
+  })
+})
