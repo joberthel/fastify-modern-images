@@ -1,8 +1,14 @@
 import type { FastifyModernImagesOptionsCompression } from '../src/types'
 import { Buffer } from 'node:buffer'
+import { spawn } from 'node:child_process'
+import { EventEmitter } from 'node:events'
 import { PassThrough, Stream } from 'node:stream'
-import { describe, expect, it } from 'vitest'
-import { getBestFormat, guard, isStream, stream2buffer, validatePayload } from '../src/utils'
+import { describe, expect, it, vi } from 'vitest'
+import { getBestFormat, guard, isStream, removeBackground, stream2buffer, validatePayload } from '../src/utils'
+
+vi.mock('node:child_process', () => ({
+  spawn: vi.fn(),
+}))
 
 function createFormats(): FastifyModernImagesOptionsCompression[] {
   return [
@@ -105,5 +111,104 @@ describe('utils - getBestFormat', () => {
     ]
 
     expect(getBestFormat('image/avif', { hasAlpha: false }, limitedFormats)).toBe(false)
+  })
+})
+
+function createMockChildProcess() {
+  const child = new EventEmitter() as EventEmitter & {
+    stdin: PassThrough
+    stdout: PassThrough
+    stderr: PassThrough
+  }
+  child.stdin = new PassThrough()
+  child.stdout = new PassThrough()
+  child.stderr = new PassThrough()
+  return child
+}
+
+describe('utils - removeBackground (success and errors)', () => {
+  it('should resolve with stdout buffer on success', async () => {
+    const child = createMockChildProcess()
+    vi.mocked(spawn).mockReturnValueOnce(child as never)
+
+    const input = Buffer.from('input-image')
+    const expectedOutput = Buffer.from('output-image')
+
+    const promise = removeBackground(input, 'u2net')
+
+    expect(spawn).toHaveBeenCalledWith('rembg', ['i', '-m', 'u2net'])
+
+    child.stdout.end(expectedOutput)
+    child.stderr.end()
+    child.emit('close', 0, null)
+
+    const result = await promise
+    expect(result).toEqual(expectedOutput)
+  })
+
+  it('should reject when child emits error (e.g. ENOENT)', async () => {
+    const child = createMockChildProcess()
+    vi.mocked(spawn).mockReturnValueOnce(child as never)
+
+    const promise = removeBackground(Buffer.from('input-image'))
+    const err = Object.assign(new Error('spawn rembg ENOENT'), { code: 'ENOENT' })
+    child.emit('error', err)
+
+    await expect(promise).rejects.toThrow('spawn rembg ENOENT')
+  })
+
+  it('should reject on non-EPIPE stdin error', async () => {
+    const child = createMockChildProcess()
+    vi.mocked(spawn).mockReturnValueOnce(child as never)
+
+    const promise = removeBackground(Buffer.from('input-image'))
+    const err = Object.assign(new Error('stdin failed'), { code: 'EIO' })
+    child.stdin.emit('error', err)
+
+    await expect(promise).rejects.toThrow('stdin failed')
+  })
+})
+
+describe('utils - removeBackground (exit codes and signals)', () => {
+  it('should reject with exit code and stderr on non-zero exit', async () => {
+    const child = createMockChildProcess()
+    vi.mocked(spawn).mockReturnValueOnce(child as never)
+
+    const promise = removeBackground(Buffer.from('input-image'))
+
+    child.stdout.end()
+    child.stderr.end('model not found')
+    child.emit('close', 1, null)
+
+    await expect(promise).rejects.toThrow('rembg exited with code 1: model not found')
+  })
+
+  it('should reject with signal when terminated by signal', async () => {
+    const child = createMockChildProcess()
+    vi.mocked(spawn).mockReturnValueOnce(child as never)
+
+    const promise = removeBackground(Buffer.from('input-image'))
+
+    child.stdout.end()
+    child.stderr.end()
+    child.emit('close', null, 'SIGKILL')
+
+    await expect(promise).rejects.toThrow('rembg exited with signal SIGKILL')
+  })
+
+  it('should ignore stdin EPIPE error and report close exit code', async () => {
+    const child = createMockChildProcess()
+    vi.mocked(spawn).mockReturnValueOnce(child as never)
+
+    const promise = removeBackground(Buffer.from('input-image'))
+
+    const epipeErr = Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })
+    child.stdin.emit('error', epipeErr)
+
+    child.stdout.end()
+    child.stderr.end('broken pipe')
+    child.emit('close', 1, null)
+
+    await expect(promise).rejects.toThrow('rembg exited with code 1: broken pipe')
   })
 })

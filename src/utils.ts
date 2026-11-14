@@ -42,14 +42,68 @@ export function isStream(stream: unknown): stream is Stream {
   return stream !== null && typeof stream === 'object' && 'pipe' in stream && typeof stream.pipe === 'function'
 }
 
+function formatExitError(code: number | null, signal: NodeJS.Signals | null, stderrBuffer: Buffer): Error {
+  const stderr = stderrBuffer.toString().trim()
+  const status = code !== null
+    ? `code ${code}`
+    : `signal ${signal ?? 'unknown'}`
+  const details = stderr
+    ? `: ${stderr}`
+    : ''
+  return new Error(`rembg exited with ${status}${details}`)
+}
+
 export async function removeBackground(input: Buffer, model = 'u2netp'): Promise<Buffer> {
   const child = spawn('rembg', ['i', '-m', model])
 
-  return new Promise((resolve) => {
-    child.stdin.write(input, () => {
-      child.stdin.end()
+  return new Promise<Buffer>((resolve, reject) => {
+    let settled = false
 
-      resolve(stream2buffer(child.stdout))
+    const fail = (err: Error) => {
+      if (!settled) {
+        settled = true
+        reject(err)
+      }
+    }
+
+    const stdoutPromise = stream2buffer(child.stdout)
+    const stderrPromise = stream2buffer(child.stderr).catch(() => Buffer.alloc(0))
+
+    child.on('error', fail)
+
+    child.stdin.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code !== 'EPIPE') {
+        fail(err)
+      }
     })
+
+    child.on('close', (code, signal) => {
+      if (settled) {
+        return
+      }
+
+      if (code !== 0) {
+        void stderrPromise.then((buf) => {
+          fail(formatExitError(code, signal, buf))
+        })
+        return
+      }
+
+      void stdoutPromise.then(
+        (output) => {
+          if (!settled) {
+            settled = true
+            resolve(output)
+          }
+        },
+        (err: unknown) => {
+          fail(err instanceof Error
+            ? err
+            : new Error(String(err)))
+        },
+      )
+    })
+
+    child.stdin.end(input)
   })
 }
