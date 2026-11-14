@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isNonEmpty,
   MAX_DIMENSION,
   parseBackground,
   parseDimension,
@@ -76,6 +77,28 @@ describe('validation helpers', () => {
       expect(parseBackground('')).toBeUndefined()
       expect(parseBackground('notacolor')).toBeUndefined()
       expect(parseBackground('#zzzzzz')).toBeUndefined()
+    })
+  })
+
+  describe('isNonEmpty', () => {
+    it('returns true only for non-empty strings', () => {
+      expect(isNonEmpty('a')).toBe(true)
+      expect(isNonEmpty('')).toBe(false)
+      expect(isNonEmpty(undefined)).toBe(false)
+      expect(isNonEmpty(['red', 'blue'])).toBe(false)
+      expect(isNonEmpty(123)).toBe(false)
+      expect(isNonEmpty(null)).toBe(false)
+    })
+  })
+
+  describe('querystring array pollution', () => {
+    it('safely rejects array values in all parsers', () => {
+      const polluted = ['red', 'blue'] as unknown as string
+      expect(parseDimension(polluted)).toBeNull()
+      expect(parseRotation(polluted)).toBeUndefined()
+      expect(parseFit(polluted)).toBe('cover')
+      expect(parsePosition(polluted)).toBe('centre')
+      expect(parseBackground(polluted)).toBeUndefined()
     })
   })
 })

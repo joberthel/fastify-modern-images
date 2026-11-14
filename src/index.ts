@@ -141,7 +141,7 @@ async function resolveInputBuffer(
     : payload as Buffer
 
   const ai = query.ai ?? query.a
-  if (!rembg.enabled || ai === undefined) {
+  if (!rembg.enabled || typeof ai !== 'string') {
     return buffer
   }
 

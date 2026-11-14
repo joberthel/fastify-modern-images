@@ -126,6 +126,28 @@ describe('fastifyModernImages unit tests - passthrough and input', () => {
     }))
     spy.mockRestore()
   })
+
+  it('ignores non-string ai/a query values (e.g. array pollution) when rembg is enabled', async () => {
+    const spy = vi.spyOn(utils, 'removeBackground').mockResolvedValue(Buffer.from('no-bg'))
+    const onSend = await registerPlugin({
+      rembg: { enabled: true, model: 'u2net' },
+    })
+
+    await onSend(createRequest({
+      query: {
+        ai: ['u2net', 'isnet'] as unknown as string,
+      },
+    }), createReply(), Buffer.from('raw'))
+    expect(spy).not.toHaveBeenCalled()
+
+    await onSend(createRequest({
+      query: {
+        a: ['u2net', 'isnet'] as unknown as string,
+      },
+    }), createReply(), Buffer.from('raw'))
+    expect(spy).not.toHaveBeenCalled()
+    spy.mockRestore()
+  })
 })
 
 describe('fastifyModernImages unit tests - transforms and encoding', () => {

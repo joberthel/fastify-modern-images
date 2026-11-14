@@ -62,8 +62,8 @@ const NAMED_COLORS = new Set<string>([
   'brown',
 ])
 
-export function isNonEmpty(value?: string): value is string {
-  return value !== undefined && value !== ''
+export function isNonEmpty(value?: unknown): value is string {
+  return typeof value === 'string' && value.length > 0
 }
 
 export function parseDimension(value?: string): number | null {

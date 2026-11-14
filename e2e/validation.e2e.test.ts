@@ -39,6 +39,12 @@ describe('query parameter validation integration', () => {
       '?width=50&position=invalid',
       '?background=notacolor',
       '?b=invalid!!!',
+      '?b=red&b=blue',
+      '?w=50&w=100',
+      '?r=90&r=180',
+      '?f=contain&f=cover',
+      '?p=top&p=bottom',
+      '?ai=u2net&ai=isnet',
     ]
 
     for (const qs of invalidQueries) {
