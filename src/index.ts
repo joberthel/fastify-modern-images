@@ -224,7 +224,7 @@ async function processPayload(
 }
 
 async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModernImagesOptions) {
-  const options: FastifyModernImagesOptions = merge(defaults, opts)
+  const options: FastifyModernImagesOptions = merge({}, defaults, opts)
   const contentTypes = Object.values(options.compression ?? {})
     .map(item => item.contentType)
     .filter((ct): ct is string => ct !== undefined)

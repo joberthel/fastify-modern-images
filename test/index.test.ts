@@ -194,3 +194,42 @@ describe('passthrough behaviour', () => {
     expect(await fetch('/test.jpg', 'image/avif,image/webp')).toBe('image/jpeg')
   })
 })
+
+describe('immutability of defaults and format.options', () => {
+  it('should not mutate defaults across plugin registrations', async () => {
+    const server1 = fastify()
+    server1.register(fastifyModernImages, {
+      compression: {
+        avif: { enabled: false, format: 'avif' },
+      },
+    })
+    server1.register(fastifyStatic, {
+      root: path.join(__dirname, '../example/public'),
+      prefix: '/',
+    })
+
+    const server2 = fastify()
+    server2.register(fastifyModernImages)
+    server2.register(fastifyStatic, {
+      root: path.join(__dirname, '../example/public'),
+      prefix: '/',
+    })
+
+    const res1 = await server1.inject({
+      method: 'GET',
+      url: '/test.jpg',
+      headers: { accept: 'image/avif,image/webp' },
+    })
+    expect(res1.headers['content-type']).toBe('image/webp')
+
+    const res2 = await server2.inject({
+      method: 'GET',
+      url: '/test.jpg',
+      headers: { accept: 'image/avif,image/webp' },
+    })
+    expect(res2.headers['content-type']).toBe('image/avif')
+
+    await server1.close()
+    await server2.close()
+  })
+})
