@@ -1,6 +1,7 @@
 {
   "name": "fastify-modern-images",
   "version": "0.7.0",
+  "packageManager": "pnpm@12.18.0",
   "description": "Fastify plugin, which converts images automatically into modern formats.",
   "author": "Johannes Berthel",
   "license": "MIT",
