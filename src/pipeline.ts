@@ -11,6 +11,31 @@ import { isNonEmptyString, normalizeTransformParams, parseQuality } from './vali
 
 export const processedReplies = new WeakSet<FastifyReply>()
 
+/**
+ * Error thrown when an input image exceeds configured resource limits (e.g. pixel count).
+ */
+export class InputLimitExceededError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'InputLimitExceededError'
+  }
+}
+
+/**
+ * Returns true if the error represents a fatal input-limit violation that should
+ * propagate as an HTTP 500 rather than falling back to the unoptimized buffer.
+ */
+export function isFatalInputLimitError(err: unknown): boolean {
+  if (err instanceof InputLimitExceededError) {
+    return true
+  }
+  if (!(err instanceof Error)) {
+    return false
+  }
+  const msg = err.message.toLowerCase()
+  return msg.includes('pixel limit') || (msg.includes('exceeds') && msg.includes('limit'))
+}
+
 function applyResize(
   instance: sharp.Sharp,
   params: NormalizedTransformParams,
@@ -181,6 +206,18 @@ export async function processPayload(
     }
 
     const metadata = await instance.metadata()
+    const pixelLimit = options.sharpInputOptions?.limitInputPixels
+    if (
+      typeof pixelLimit === 'number'
+      && pixelLimit > 0
+      && metadata.width !== undefined
+      && metadata.height !== undefined
+      && metadata.width * metadata.height > pixelLimit
+    ) {
+      throw new InputLimitExceededError(
+        `Input image exceeds pixel limit (${metadata.width * metadata.height} > ${pixelLimit})`,
+      )
+    }
     const flattened = isNonEmptyString(params.background)
     const format = getBestFormat(accept, metadata, compressionList, flattened)
 
@@ -216,7 +253,7 @@ export async function processPayload(
     }, inFlight)
   }
   catch (err) {
-    if (err instanceof Error && err.message.includes('pixel limit')) {
+    if (isFatalInputLimitError(err)) {
       throw err
     }
     request.log.error(err)
