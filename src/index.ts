@@ -3,7 +3,7 @@ import type { FastifyModernImagesOptions, MinifyRequest } from './types'
 import fp from 'fastify-plugin'
 import { resolveOptions } from './config'
 import { guard, validatePayload } from './negotiation'
-import { processPayload } from './pipeline'
+import { processedReplies, processPayload } from './pipeline'
 
 async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModernImagesOptions) {
   const options = resolveOptions(opts)
@@ -11,7 +11,8 @@ async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModern
 
   fastify.addHook('onSend', async (request: FastifyRequest<MinifyRequest>, reply, payload) => {
     if (
-      request.method !== 'GET'
+      processedReplies.has(reply)
+      || request.method !== 'GET'
       || reply.statusCode !== 200
       || !guard(options.regex, request.raw.url)
       || !validatePayload(reply.getHeader('Content-Type'), contentTypes, payload)

@@ -7,6 +7,8 @@ import { appendVaryHeader, getBestFormat, isStream } from './negotiation'
 import { removeBackground } from './providers/rembg'
 import { isNonEmpty, parseBackground, parseDimension, parseFit, parsePosition, parseQuality, parseRotation, parseTrim } from './validation'
 
+export const processedReplies = new WeakSet<FastifyReply>()
+
 function applyResize(instance: sharp.Sharp, query: MinifyQuerystring, background?: string): void {
   const width = parseDimension(query.width ?? query.w)
   const height = parseDimension(query.height ?? query.h)
@@ -92,6 +94,8 @@ async function encodeAndReply(
   reply.header('Vary', appendVaryHeader(reply.getHeader('Vary'), 'Accept'))
   reply.removeHeader('etag')
   reply.removeHeader('accept-ranges')
+
+  processedReplies.add(reply)
 
   return output
 }

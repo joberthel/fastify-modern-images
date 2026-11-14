@@ -254,4 +254,37 @@ describe('fastifyModernImages unit tests - transforms and encoding', () => {
       expect(mockSharpInstance.trim).not.toHaveBeenCalled()
     }
   })
+
+  it('skips second onSend hook when reply was already transformed', async () => {
+    const onSend1 = await registerPlugin()
+    const onSend2 = await registerPlugin()
+    const req = createRequest()
+    const reply = createReply('image/jpeg')
+
+    const firstResult = await onSend1(req, reply, Buffer.from('raw'))
+    expect(firstResult).toEqual(Buffer.from('encoded'))
+    expect(mockSharpInstance.toFormat).toHaveBeenCalledTimes(1)
+
+    const secondResult = await onSend2(req, reply, firstResult)
+    expect(secondResult).toBe(firstResult)
+    expect(mockSharpInstance.toFormat).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows second onSend hook when first hook did not transform', async () => {
+    const onSend1 = await registerPlugin({ regex: /^\/other\// })
+    const onSend2 = await registerPlugin()
+    const req = createRequest({
+      raw: { url: '/image.jpg' },
+    })
+    const reply = createReply('image/jpeg')
+    const raw = Buffer.from('raw')
+
+    const firstResult = await onSend1(req, reply, raw)
+    expect(firstResult).toBe(raw)
+    expect(mockSharpInstance.toFormat).not.toHaveBeenCalled()
+
+    const secondResult = await onSend2(req, reply, firstResult)
+    expect(secondResult).toEqual(Buffer.from('encoded'))
+    expect(mockSharpInstance.toFormat).toHaveBeenCalledTimes(1)
+  })
 })
