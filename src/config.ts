@@ -110,9 +110,11 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return proto === Object.prototype || proto === null
 }
 
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
 function mergeInto(result: Record<string, unknown>, source: Record<string, unknown>): void {
   for (const [key, value] of Object.entries(source)) {
-    if (key === '__proto__' || value === undefined) {
+    if (UNSAFE_KEYS.has(key) || value === undefined) {
       continue
     }
 
@@ -136,7 +138,7 @@ export function deepMerge<T extends object>(
   const result: Record<string, unknown> = {}
 
   for (const [key, value] of Object.entries(target as Record<string, unknown>)) {
-    if (key === '__proto__') {
+    if (UNSAFE_KEYS.has(key)) {
       continue
     }
     result[key] = isPlainObject(value)

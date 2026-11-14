@@ -486,6 +486,25 @@ describe('deepMerge', () => {
       nested: { a: 1, b: 3 },
     })
   })
+
+  it('skips __proto__, constructor, and prototype keys in target and sources', () => {
+    const maliciousTarget = JSON.parse('{"safe":1,"__proto__":{"polluted":true},"constructor":{"prototype":{"polluted":true}},"prototype":{"polluted":true}}') as Record<string, unknown>
+    const maliciousSource = JSON.parse('{"extra":2,"__proto__":{"polluted2":true},"constructor":{"prototype":{"polluted2":true}},"prototype":{"polluted2":true},"nested":{"__proto__":{"polluted3":true},"constructor":{"polluted3":true},"prototype":{"polluted3":true},"ok":true}}') as Record<string, unknown>
+
+    const merged = deepMerge(maliciousTarget, maliciousSource)
+
+    expect(merged).toEqual({
+      safe: 1,
+      extra: 2,
+      nested: { ok: true },
+    })
+    expect(Object.hasOwn(merged, '__proto__')).toBe(false)
+    expect(Object.hasOwn(merged, 'constructor')).toBe(false)
+    expect(Object.hasOwn(merged, 'prototype')).toBe(false)
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+    expect(({} as Record<string, unknown>).polluted2).toBeUndefined()
+    expect(({} as Record<string, unknown>).polluted3).toBeUndefined()
+  })
 })
 
 describe('negotiation - computeDerivedEtag & matchesIfNoneMatch', () => {
