@@ -1,10 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { Buffer } from 'node:buffer'
 import type { CompressionConfig, FastifyModernImagesOptions, MinifyQuerystring, MinifyRequest, ResolvedFastifyModernImagesOptions } from './types'
+import { buffer as streamToBuffer } from 'node:stream/consumers'
 import fp from 'fastify-plugin'
 import merge from 'lodash/merge'
 import sharp from 'sharp'
-import { appendVaryHeader, getBestFormat, guard, isStream, removeBackground, stream2buffer, validatePayload } from './utils'
+import { appendVaryHeader, getBestFormat, guard, isStream, removeBackground, validatePayload } from './utils'
 import { isNonEmpty, parseBackground, parseDimension, parseFit, parsePosition, parseRotation } from './validation'
 
 const defaults: ResolvedFastifyModernImagesOptions = {
@@ -134,7 +135,7 @@ async function resolveInputBuffer(
   defaultModel?: string,
 ): Promise<Buffer> {
   const buffer = isStream(payload)
-    ? await stream2buffer(payload)
+    ? await streamToBuffer(payload as unknown as NodeJS.ReadableStream)
     : payload as Buffer
 
   const ai = query.ai ?? query.a

@@ -3,16 +3,7 @@ import type { Metadata } from 'sharp'
 import type { CompressionConfig } from './types'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
-
-export async function stream2buffer(stream: Stream): Promise<Buffer> {
-  return new Promise<Buffer>((resolve, reject) => {
-    const _buf: Buffer[] = []
-
-    stream.on('data', (chunk: Buffer) => _buf.push(chunk))
-    stream.on('end', () => resolve(Buffer.concat(_buf)))
-    stream.on('error', err => reject(new Error(`error converting stream - ${err}`)))
-  })
-}
+import { buffer } from 'node:stream/consumers'
 
 export function guard(regex: RegExp, path: string = '/'): boolean {
   return regex.test(path)
@@ -69,8 +60,8 @@ export async function removeBackground(input: Buffer, model = 'u2netp'): Promise
       }
     }
 
-    const stdoutPromise = stream2buffer(child.stdout)
-    const stderrPromise = stream2buffer(child.stderr).catch(() => Buffer.alloc(0))
+    const stdoutPromise = buffer(child.stdout)
+    const stderrPromise = buffer(child.stderr).catch(() => Buffer.alloc(0))
 
     child.on('error', fail)
 

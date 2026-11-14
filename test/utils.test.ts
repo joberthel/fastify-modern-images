@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { PassThrough, Stream } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import { appendVaryHeader, getBestFormat, guard, isStream, removeBackground, stream2buffer, validatePayload } from '../src/utils'
+import { appendVaryHeader, getBestFormat, guard, isStream, removeBackground, validatePayload } from '../src/utils'
 
 vi.mock('node:child_process', () => ({
   spawn: vi.fn(),
@@ -56,20 +56,6 @@ function createFormats(): CompressionConfig[] {
 }
 
 describe('utils - stream and guard', () => {
-  it('should convert stream to buffer', async () => {
-    let stream = new PassThrough()
-    stream.write('foo bar')
-    stream.end()
-
-    expect((await stream2buffer(stream)).toString()).toBe('foo bar')
-
-    stream = new PassThrough()
-    stream.write('foo bar')
-    stream.destroy(new Error('foo-bar'))
-
-    await expect(stream2buffer(stream)).rejects.toThrow('error converting stream - Error: foo-bar')
-  })
-
   it('should guard by url', () => {
     expect(guard(/\/foo-bar/, '/foo-bar/hello-world.jpg')).toBe(true)
     expect(guard(/\/foo-bar/, '/bar-foo/hello-world.jpg')).toBe(false)
