@@ -92,21 +92,38 @@ describe('fastifyModernImages unit tests - passthrough and input', () => {
     expect(result).toEqual(Buffer.from('encoded'))
   })
 
-  it('calls removeBackground with default and custom model when ai/a query is set', async () => {
+  it('ignores ai/a query when rembg is disabled by default', async () => {
+    const spy = vi.spyOn(utils, 'removeBackground').mockResolvedValue(Buffer.from('no-bg'))
+    const onSend = await registerPlugin()
+
+    await onSend(createRequest({
+      query: { ai: 'u2net' },
+    }), createReply(), Buffer.from('raw'))
+    expect(spy).not.toHaveBeenCalled()
+    spy.mockRestore()
+  })
+
+  it('calls removeBackground with default and custom model when rembg is enabled and ai/a query is set', async () => {
     const spy = vi.spyOn(utils, 'removeBackground').mockResolvedValue(Buffer.from('no-bg'))
     const onSend = await registerPlugin({
-      rembg: { model: 'u2net' },
+      rembg: { enabled: true, model: 'u2net' },
     })
 
     await onSend(createRequest({
       query: { ai: '' },
     }), createReply(), Buffer.from('raw'))
-    expect(spy).toHaveBeenCalledWith(Buffer.from('raw'), 'u2net')
+    expect(spy).toHaveBeenCalledWith(Buffer.from('raw'), 'u2net', expect.objectContaining({
+      timeoutMs: 30_000,
+      concurrency: 2,
+    }))
 
     await onSend(createRequest({
       query: { a: 'isnet' },
     }), createReply(), Buffer.from('raw'))
-    expect(spy).toHaveBeenCalledWith(Buffer.from('raw'), 'isnet')
+    expect(spy).toHaveBeenCalledWith(Buffer.from('raw'), 'isnet', expect.objectContaining({
+      timeoutMs: 30_000,
+      concurrency: 2,
+    }))
     spy.mockRestore()
   })
 })

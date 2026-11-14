@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { Buffer } from 'node:buffer'
-import type { CompressionConfig, FastifyModernImagesOptions, MinifyQuerystring, MinifyRequest, ResolvedFastifyModernImagesOptions } from './types'
+import type { CompressionConfig, FastifyModernImagesOptions, MinifyQuerystring, MinifyRequest, RembgOptions, ResolvedFastifyModernImagesOptions } from './types'
 import { buffer as streamToBuffer } from 'node:stream/consumers'
 import fp from 'fastify-plugin'
 import sharp from 'sharp'
@@ -11,7 +11,10 @@ const defaults: ResolvedFastifyModernImagesOptions = {
   regex: /.*/,
   quality: '7',
   rembg: {
+    enabled: false,
     model: 'isnet-general-use',
+    timeoutMs: 30_000,
+    concurrency: 2,
   },
   compression: {
     jpeg: {
@@ -131,21 +134,26 @@ function applySharpTransforms(instance: sharp.Sharp, query: MinifyQuerystring): 
 async function resolveInputBuffer(
   payload: unknown,
   query: MinifyQuerystring,
-  defaultModel?: string,
+  rembg: RembgOptions,
 ): Promise<Buffer> {
   const buffer = isStream(payload)
     ? await streamToBuffer(payload as unknown as NodeJS.ReadableStream)
     : payload as Buffer
 
   const ai = query.ai ?? query.a
-  if (ai === undefined) {
+  if (!rembg.enabled || ai === undefined) {
     return buffer
   }
 
   const model = ai.length > 0
     ? ai
-    : defaultModel
-  return removeBackground(buffer, model)
+    : rembg.model
+  return removeBackground(buffer, model, {
+    allowedModels: rembg.allowedModels,
+    timeoutMs: rembg.timeoutMs,
+    concurrency: rembg.concurrency,
+    endpoint: rembg.endpoint,
+  })
 }
 
 interface EncodeContext {
@@ -185,7 +193,7 @@ async function processPayload(
   payload: unknown,
   options: ResolvedFastifyModernImagesOptions,
 ): Promise<unknown> {
-  const buffer = await resolveInputBuffer(payload, request.query, options.rembg.model)
+  const buffer = await resolveInputBuffer(payload, request.query, options.rembg)
   const instance = sharp(buffer)
 
   if ((request.query.trim ?? request.query.t) !== undefined) {

@@ -57,12 +57,19 @@ export interface CompressionConfig {
   supported: (accept: string) => boolean
 }
 
+export interface RembgOptions {
+  enabled: boolean
+  model: string
+  allowedModels?: string[]
+  timeoutMs?: number
+  concurrency?: number
+  endpoint?: string
+}
+
 export interface ResolvedFastifyModernImagesOptions {
   regex: RegExp
   quality: string | number
-  rembg: {
-    model: string
-  }
+  rembg: RembgOptions
   compression: Record<string, CompressionConfig>
 }
 
@@ -71,8 +78,6 @@ export type FastifyModernImagesOptionsCompression = Partial<CompressionConfig>
 export interface FastifyModernImagesOptions {
   regex?: RegExp
   quality?: string | number
-  rembg?: {
-    model?: string
-  }
+  rembg?: Partial<RembgOptions>
   compression?: Record<string, FastifyModernImagesOptionsCompression>
 }
