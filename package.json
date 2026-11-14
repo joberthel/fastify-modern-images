@@ -22,6 +22,9 @@
   "files": [
     "dist"
   ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "prepare": "husky",
     "prepublishOnly": "pnpm build",
@@ -33,6 +36,9 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "commitlint": "commitlint"
+  },
+  "peerDependencies": {
+    "fastify": "^5.0.0"
   },
   "dependencies": {
     "fastify-plugin": "^5.0.1",
