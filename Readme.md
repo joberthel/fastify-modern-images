@@ -47,6 +47,7 @@ fastify
 {
     regex: /.*/, // If it is set will check this regex against request.raw.url (path + query string). Will only apply plugin if it is true.
     quality: '7', // Sets the default quality from '1' (worst), '2', ... '9' (best).
+    sharpInputOptions: {}, // Options passed to the sharp(buffer, options) constructor (e.g. limitInputPixels, failOn, sequentialRead).
     rembg: {
         model: 'isnet-general-use' // https://github.com/danielgatis/rembg#models
     },

@@ -376,4 +376,17 @@ describe('fastifyModernImages unit tests - transforms and encoding', () => {
     )
     expect(recovered).toEqual(Buffer.from('recovered'))
   })
+
+  it('passes sharpInputOptions to sharp constructor', async () => {
+    const sharpModule = await import('sharp')
+    const sharpMock = vi.mocked(sharpModule.default)
+    sharpMock.mockClear()
+
+    const sharpInputOptions = { limitInputPixels: 1000, failOn: 'error' as const, sequentialRead: true }
+    const onSend = await registerPlugin({ sharpInputOptions })
+    const raw = Buffer.from('raw')
+    await onSend(createRequest(), createReply('image/jpeg'), raw)
+
+    expect(sharpMock).toHaveBeenCalledWith(raw, sharpInputOptions)
+  })
 })

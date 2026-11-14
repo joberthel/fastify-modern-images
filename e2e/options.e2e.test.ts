@@ -87,4 +87,33 @@ describe('plugin options', () => {
       ])
     }
   })
+
+  it('passes sharpInputOptions to sharp and enforces limitInputPixels', async () => {
+    const limitedServer = fastify()
+    limitedServer.register(fastifyModernImages, {
+      sharpInputOptions: {
+        limitInputPixels: 1,
+      },
+    })
+    limitedServer.register(fastifyStatic, {
+      root: path.join(__dirname, '../example/public'),
+      prefix: '/',
+    })
+    await limitedServer.ready()
+
+    try {
+      const res = await limitedServer.inject({
+        method: 'GET',
+        url: '/test.jpg',
+        headers: {
+          accept: 'image/webp',
+        },
+      })
+
+      expect(res.statusCode).toBe(500)
+    }
+    finally {
+      await limitedServer.close()
+    }
+  })
 })

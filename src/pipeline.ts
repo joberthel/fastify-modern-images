@@ -156,7 +156,7 @@ export async function processPayload(
   }
 
   const { buffer, inputLength } = await resolveInputBuffer(payload, request.query, options.rembg)
-  const instance = sharp(buffer)
+  const instance = sharp(buffer, options.sharpInputOptions)
 
   if (parseTrim(request.query.trim ?? request.query.t)) {
     instance.trim()

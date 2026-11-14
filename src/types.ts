@@ -73,6 +73,7 @@ export interface ResolvedFastifyModernImagesOptions {
   quality: string | number
   rembg: RembgOptions
   compression: Record<string, CompressionConfig>
+  sharpInputOptions?: sharp.SharpOptions
 }
 
 export type FastifyModernImagesOptionsCompression = Partial<CompressionConfig>
@@ -82,4 +83,5 @@ export interface FastifyModernImagesOptions {
   quality?: string | number
   rembg?: Partial<RembgOptions>
   compression?: Record<string, FastifyModernImagesOptionsCompression>
+  sharpInputOptions?: sharp.SharpOptions
 }
