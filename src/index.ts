@@ -193,6 +193,7 @@ async function encodeAndReply(
   }
   reply.header('Content-Length', output.length)
   reply.header('Vary', appendVaryHeader(reply.getHeader('Vary'), 'Accept'))
+  reply.removeHeader('etag')
 
   return output
 }
