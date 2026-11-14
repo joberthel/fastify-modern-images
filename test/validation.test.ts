@@ -26,21 +26,33 @@ describe('validation helpers', () => {
       expect(parseDimension('999999999')).toBeNull()
       expect(parseDimension(String(MAX_DIMENSION + 1))).toBeNull()
       expect(parseDimension('abc')).toBeNull()
+      expect(parseDimension('150px')).toBeNull()
+      expect(parseDimension('100.5')).toBeNull()
+      expect(parseDimension(' 100')).toBeNull()
     })
   })
 
   describe('parseRotation', () => {
-    it('accepts finite integers', () => {
+    it('accepts finite integers within [-360, 360]', () => {
       expect(parseRotation('0')).toBe(0)
+      expect(parseRotation('45')).toBe(45)
+      expect(parseRotation('-45')).toBe(-45)
       expect(parseRotation('90')).toBe(90)
       expect(parseRotation('-90')).toBe(-90)
+      expect(parseRotation('360')).toBe(360)
+      expect(parseRotation('-360')).toBe(-360)
     })
 
-    it('rejects non-numeric, empty, and non-finite values', () => {
+    it('rejects non-numeric, empty, out-of-bounds, and non-finite values', () => {
       expect(parseRotation(undefined)).toBeUndefined()
       expect(parseRotation('')).toBeUndefined()
       expect(parseRotation('abc')).toBeUndefined()
       expect(parseRotation('Infinity')).toBeUndefined()
+      expect(parseRotation('90deg')).toBeUndefined()
+      expect(parseRotation('90.5')).toBeUndefined()
+      expect(parseRotation('361')).toBeUndefined()
+      expect(parseRotation('-361')).toBeUndefined()
+      expect(parseRotation('99999999')).toBeUndefined()
     })
   })
 

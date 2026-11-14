@@ -73,7 +73,7 @@ export function isNonEmpty(value?: unknown): value is string {
 }
 
 export function parseDimension(value?: string): number | null {
-  if (!isNonEmpty(value)) {
+  if (!isNonEmpty(value) || !/^\d+$/.test(value)) {
     return null
   }
   const parsed = Number.parseInt(value, 10)
@@ -84,11 +84,11 @@ export function parseDimension(value?: string): number | null {
 }
 
 export function parseRotation(value?: string): number | undefined {
-  if (!isNonEmpty(value)) {
+  if (!isNonEmpty(value) || !/^-?\d+$/.test(value)) {
     return undefined
   }
   const parsed = Number.parseInt(value, 10)
-  if (!Number.isFinite(parsed)) {
+  if (!Number.isFinite(parsed) || parsed < -360 || parsed > 360) {
     return undefined
   }
   return parsed
