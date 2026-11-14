@@ -1,6 +1,12 @@
 name: Test and Publish
 
-on: [push]
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   test_and_publish:
@@ -31,19 +37,31 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Validate conventional commits
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            pnpm exec commitlint --from="${{ github.event.pull_request.base.sha }}" --to="${{ github.event.pull_request.head.sha }}"
+          else
+            if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+              pnpm exec commitlint --from="HEAD~1" --to="HEAD"
+            else
+              pnpm exec commitlint --last
+            fi
+          fi
+
       - name: Run tests with coverage
         run: pnpm test:coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
 
-      - name: Publish to npm
-        if: github.ref == 'refs/heads/main'
-        run: |
-          export COMMIT_MESSAGE="${{ github.event.head_commit.message }}"
-          if [[ $COMMIT_MESSAGE == *"[skip npm]"* ]]; then
-            echo "Skipping npm publish."
-          else
-            echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > .npmrc
-            pnpm publish
-          fi
+      # - name: Publish to npm
+      #   if: github.ref == 'refs/heads/main'
+      #   run: |
+      #     export COMMIT_MESSAGE="${{ github.event.head_commit.message }}"
+      #     if [[ $COMMIT_MESSAGE == *"[skip npm]"* ]]; then
+      #       echo "Skipping npm publish."
+      #     else
+      #       echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > .npmrc
+      #       pnpm publish
+      #     fi
