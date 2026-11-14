@@ -34,6 +34,8 @@ const VALID_POSITION_VALUES = new Set<string>([
 ])
 
 const HEX_COLOR_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
+// Legacy comma-separated rgb()/rgba() (matching numeric or percentage channels)
+// and hsl()/hsla() with optional 0..1 alpha values.
 const NUM_RE = String.raw`\d{1,3}(?:\.\d+)?`
 const PCT_RE = String.raw`\d{1,3}(?:\.\d+)?%`
 const ALPHA_RE = String.raw`(?:0(?:\.\d+)?|1(?:\.0+)?|\.\d+)`

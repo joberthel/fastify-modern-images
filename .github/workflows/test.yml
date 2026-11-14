@@ -76,11 +76,6 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      # - uses: actions/setup-python@v5
-      #   with:
-      #     python-version: 3.13
-      # - run: pip install "rembg[cli]"
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
