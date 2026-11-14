@@ -5,6 +5,7 @@ import fp from 'fastify-plugin'
 import merge from 'lodash/merge'
 import sharp from 'sharp'
 import { appendVaryHeader, getBestFormat, guard, isStream, removeBackground, stream2buffer, validatePayload } from './utils'
+import { isNonEmpty, parseBackground, parseDimension, parseFit, parsePosition, parseRotation } from './validation'
 
 const defaults: FastifyModernImagesOptions = {
   regex: /.*/,
@@ -98,42 +99,24 @@ const defaults: FastifyModernImagesOptions = {
   },
 }
 
-function isNonEmpty(value?: string): value is string {
-  return value !== undefined && value !== ''
-}
-
-function parseIntOrUndefined(value?: string): number | undefined {
-  if (!isNonEmpty(value)) {
-    return undefined
-  }
-  return Number.parseInt(value, 10)
-}
-
-function parseDimension(value?: string): number | null {
-  if (!isNonEmpty(value)) {
-    return null
-  }
-  return Number.parseInt(value, 10) || null
-}
-
 function applyResize(instance: sharp.Sharp, query: MinifyQuerystring, background?: string): void {
-  const uWidth = query.width ?? query.w
-  const uHeight = query.height ?? query.h
+  const width = parseDimension(query.width ?? query.w)
+  const height = parseDimension(query.height ?? query.h)
 
-  if (!isNonEmpty(uWidth) && !isNonEmpty(uHeight)) {
+  if (width === null && height === null) {
     return
   }
 
-  instance.resize(parseDimension(uWidth), parseDimension(uHeight), {
-    fit: query.fit ?? query.f ?? 'cover',
-    position: query.position ?? query.p ?? 'centre',
+  instance.resize(width, height, {
+    fit: parseFit(query.fit ?? query.f),
+    position: parsePosition(query.position ?? query.p),
     background,
   })
 }
 
 function applySharpTransforms(instance: sharp.Sharp, query: MinifyQuerystring): void {
-  const background = query.background ?? query.b
-  const rotation = parseIntOrUndefined(query.rotation ?? query.r)
+  const background = parseBackground(query.background ?? query.b)
+  const rotation = parseRotation(query.rotation ?? query.r)
 
   instance.rotate(rotation, { background })
   applyResize(instance, query, background)

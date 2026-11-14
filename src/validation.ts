@@ -1,0 +1,120 @@
+import type { MinifyQuerystring } from './types'
+
+export const MAX_DIMENSION = 16384
+
+const VALID_FIT_VALUES = new Set<NonNullable<MinifyQuerystring['fit']>>([
+  'cover',
+  'contain',
+  'fill',
+  'inside',
+  'outside',
+])
+
+const VALID_POSITION_VALUES = new Set<string>([
+  'top',
+  'right top',
+  'right',
+  'right bottom',
+  'bottom',
+  'left bottom',
+  'left',
+  'left top',
+  'north',
+  'northeast',
+  'east',
+  'southeast',
+  'south',
+  'southwest',
+  'west',
+  'northwest',
+  'center',
+  'centre',
+  'entropy',
+  'attention',
+])
+
+const HEX_COLOR_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
+const FUNC_COLOR_RE = /^(?:rgb|hsl)a?\(\s*\d{1,3}(?:\.\d+)?%?\s*(?:,\s*\d{1,3}(?:\.\d+)?%?\s*){2,3}\)$/i
+
+const NAMED_COLORS = new Set<string>([
+  'transparent',
+  'black',
+  'white',
+  'red',
+  'green',
+  'blue',
+  'yellow',
+  'cyan',
+  'magenta',
+  'gray',
+  'grey',
+  'silver',
+  'maroon',
+  'olive',
+  'lime',
+  'aqua',
+  'teal',
+  'navy',
+  'fuchsia',
+  'purple',
+  'orange',
+  'pink',
+  'brown',
+])
+
+export function isNonEmpty(value?: string): value is string {
+  return value !== undefined && value !== ''
+}
+
+export function parseDimension(value?: string): number | null {
+  if (!isNonEmpty(value)) {
+    return null
+  }
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed) || parsed < 1 || parsed > MAX_DIMENSION) {
+    return null
+  }
+  return parsed
+}
+
+export function parseRotation(value?: string): number | undefined {
+  if (!isNonEmpty(value)) {
+    return undefined
+  }
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed)) {
+    return undefined
+  }
+  return parsed
+}
+
+export function parseFit(value?: string): NonNullable<MinifyQuerystring['fit']> {
+  if (isNonEmpty(value) && VALID_FIT_VALUES.has(value as NonNullable<MinifyQuerystring['fit']>)) {
+    return value as NonNullable<MinifyQuerystring['fit']>
+  }
+  return 'cover'
+}
+
+export function parsePosition(value?: string): string {
+  if (!isNonEmpty(value)) {
+    return 'centre'
+  }
+  if (value === 'orth') {
+    return 'north'
+  }
+  if (VALID_POSITION_VALUES.has(value)) {
+    return value
+  }
+  return 'centre'
+}
+
+export function parseBackground(value?: string): string | undefined {
+  if (!isNonEmpty(value)) {
+    return undefined
+  }
+  const trimmed = value.trim()
+  if (HEX_COLOR_RE.test(trimmed) || FUNC_COLOR_RE.test(trimmed) || NAMED_COLORS.has(trimmed.toLowerCase())) {
+    return trimmed
+  }
+  return undefined
+}
