@@ -59,7 +59,7 @@ export function getBestFormat(
   metadata: Metadata,
   formats: CompressionConfig[],
   flattened: boolean = false,
-): CompressionConfig | false {
+): CompressionConfig | undefined {
   const hasAlpha = !flattened && metadata.hasAlpha === true
   const sorted = formats
     .filter(item =>
@@ -70,11 +70,7 @@ export function getBestFormat(
     )
     .sort((a, b) => b.priority - a.priority)
 
-  if (sorted.length > 0) {
-    return sorted[0]
-  }
-
-  return false
+  return sorted[0]
 }
 
 export function appendVaryHeader(

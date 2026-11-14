@@ -188,7 +188,7 @@ export async function processPayload(
     const flattened = isNonEmptyString(parseBackground(request.query.background ?? request.query.b))
     const format = getBestFormat(accept, metadata, compressionList, flattened)
 
-    if (format === false) {
+    if (format === undefined) {
       const inputType = String(reply.getHeader('Content-Type') ?? '')
       request.log.warn(`No adequate format for image of type "${inputType}" was found.`)
       return buffer

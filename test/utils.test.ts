@@ -114,10 +114,10 @@ describe('utils - getBestFormat', () => {
     const formats = createFormats()
 
     const webpResult = getBestFormat('image/webp,image/avif', { hasAlpha: false }, formats)
-    expect(webpResult !== false && webpResult.format).toBe('webp')
+    expect(webpResult?.format).toBe('webp')
 
     const pngResult = getBestFormat(undefined, { hasAlpha: true }, formats)
-    expect(pngResult !== false && pngResult.format).toBe('png')
+    expect(pngResult?.format).toBe('png')
 
     const limitedFormats: CompressionConfig[] = [
       {
@@ -142,36 +142,36 @@ describe('utils - getBestFormat', () => {
       },
     ]
 
-    expect(getBestFormat('image/avif', { hasAlpha: false }, limitedFormats)).toBe(false)
+    expect(getBestFormat('image/avif', { hasAlpha: false }, limitedFormats)).toBeUndefined()
   })
 
   it('should not convert opaque png to lossy jpeg when no modern format is accepted', () => {
     const formats = createFormats()
 
     const pngResult = getBestFormat('image/png', { format: 'png', hasAlpha: false }, formats)
-    expect(pngResult !== false && pngResult.format).toBe('png')
+    expect(pngResult?.format).toBe('png')
 
     const wildcardResult = getBestFormat('*/*', { format: 'png', hasAlpha: false }, formats)
-    expect(wildcardResult !== false && wildcardResult.format).toBe('png')
+    expect(wildcardResult?.format).toBe('png')
 
     const noAcceptResult = getBestFormat(undefined, { format: 'png', hasAlpha: false }, formats)
-    expect(noAcceptResult !== false && noAcceptResult.format).toBe('png')
+    expect(noAcceptResult?.format).toBe('png')
 
     const webpResult = getBestFormat('image/webp,image/png', { format: 'png', hasAlpha: false }, formats)
-    expect(webpResult !== false && webpResult.format).toBe('webp')
+    expect(webpResult?.format).toBe('webp')
 
     const jpegResult = getBestFormat(undefined, { format: 'jpeg', hasAlpha: false }, formats)
-    expect(jpegResult !== false && jpegResult.format).toBe('jpeg')
+    expect(jpegResult?.format).toBe('jpeg')
   })
 
   it('should allow jpeg for alpha png when flattened is true', () => {
     const formats = createFormats()
 
     const unflattenedResult = getBestFormat('image/jpeg', { format: 'png', hasAlpha: true }, formats, false)
-    expect(unflattenedResult !== false && unflattenedResult.format).toBe('png')
+    expect(unflattenedResult?.format).toBe('png')
 
     const flattenedResult = getBestFormat('image/jpeg', { format: 'png', hasAlpha: true }, formats, true)
-    expect(flattenedResult !== false && flattenedResult.format).toBe('jpeg')
+    expect(flattenedResult?.format).toBe('jpeg')
   })
 })
 
