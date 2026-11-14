@@ -5,7 +5,7 @@ import sharp from 'sharp'
 import { appendVaryHeader, computeDerivedEtag, getBestFormat, isStream, matchesIfNoneMatch } from './negotiation'
 import { removeBackground } from './providers/rembg'
 import { readStreamWithLimit } from './stream'
-import { isNonEmpty, parseBackground, parseDimension, parseFit, parsePosition, parseQuality, parseRotation, parseTrim } from './validation'
+import { isNonEmptyString, parseBackground, parseDimension, parseFit, parsePosition, parseQuality, parseRotation, parseTrim } from './validation'
 
 export const processedReplies = new WeakSet<FastifyReply>()
 
@@ -43,7 +43,7 @@ function applySharpTransforms(
   instance.rotate(rotation, { background })
   applyResize(instance, query, options, background)
 
-  if (isNonEmpty(background)) {
+  if (isNonEmptyString(background)) {
     instance.flatten({ background })
   }
 }
@@ -185,7 +185,7 @@ export async function processPayload(
     }
 
     const metadata = await instance.metadata()
-    const flattened = isNonEmpty(parseBackground(request.query.background ?? request.query.b))
+    const flattened = isNonEmptyString(parseBackground(request.query.background ?? request.query.b))
     const format = getBestFormat(accept, metadata, compressionList, flattened)
 
     if (format === false) {

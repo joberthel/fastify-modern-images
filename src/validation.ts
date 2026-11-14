@@ -68,7 +68,7 @@ const NAMED_COLORS = new Set<string>([
   'brown',
 ])
 
-export function isNonEmpty(value?: unknown): value is string {
+export function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0
 }
 
@@ -85,7 +85,7 @@ export function parseDimension(
   maxDimension = MAX_DIMENSION,
   allowedDimensions?: number[],
 ): number | null {
-  if (!isNonEmpty(value) || !/^\d+$/.test(value)) {
+  if (!isNonEmptyString(value) || !/^\d+$/.test(value)) {
     return null
   }
   const parsed = Number.parseInt(value, 10)
@@ -99,7 +99,7 @@ export function parseDimension(
 }
 
 export function parseRotation(value?: string): number | undefined {
-  if (!isNonEmpty(value) || !/^-?\d+$/.test(value)) {
+  if (!isNonEmptyString(value) || !/^-?\d+$/.test(value)) {
     return undefined
   }
   const parsed = Number.parseInt(value, 10)
@@ -110,14 +110,14 @@ export function parseRotation(value?: string): number | undefined {
 }
 
 export function parseFit(value?: string): NonNullable<MinifyQuerystring['fit']> {
-  if (isNonEmpty(value) && VALID_FIT_VALUES.has(value as NonNullable<MinifyQuerystring['fit']>)) {
+  if (isNonEmptyString(value) && VALID_FIT_VALUES.has(value as NonNullable<MinifyQuerystring['fit']>)) {
     return value as NonNullable<MinifyQuerystring['fit']>
   }
   return 'cover'
 }
 
 export function parsePosition(value?: string): string {
-  if (!isNonEmpty(value)) {
+  if (!isNonEmptyString(value)) {
     return 'centre'
   }
   if (VALID_POSITION_VALUES.has(value)) {
@@ -127,7 +127,7 @@ export function parsePosition(value?: string): string {
 }
 
 export function parseBackground(value?: string): string | undefined {
-  if (!isNonEmpty(value)) {
+  if (!isNonEmptyString(value)) {
     return undefined
   }
   const trimmed = value.trim()
@@ -142,7 +142,7 @@ export function parseQuality(
   qualityMap: Record<string, number>,
   fallback: string | number,
 ): number | undefined {
-  if (isNonEmpty(value) && Object.hasOwn(qualityMap, value)) {
+  if (isNonEmptyString(value) && Object.hasOwn(qualityMap, value)) {
     return qualityMap[value]
   }
   const fallbackKey = String(fallback)

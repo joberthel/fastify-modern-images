@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  isNonEmpty,
+  isNonEmptyString,
   MAX_DIMENSION,
   parseBackground,
   parseDimension,
@@ -119,14 +119,14 @@ describe('validation helpers', () => {
     })
   })
 
-  describe('isNonEmpty', () => {
+  describe('isNonEmptyString', () => {
     it('returns true only for non-empty strings', () => {
-      expect(isNonEmpty('a')).toBe(true)
-      expect(isNonEmpty('')).toBe(false)
-      expect(isNonEmpty(undefined)).toBe(false)
-      expect(isNonEmpty(['red', 'blue'])).toBe(false)
-      expect(isNonEmpty(123)).toBe(false)
-      expect(isNonEmpty(null)).toBe(false)
+      expect(isNonEmptyString('a')).toBe(true)
+      expect(isNonEmptyString('')).toBe(false)
+      expect(isNonEmptyString(undefined)).toBe(false)
+      expect(isNonEmptyString(['red', 'blue'])).toBe(false)
+      expect(isNonEmptyString(123)).toBe(false)
+      expect(isNonEmptyString(null)).toBe(false)
     })
   })
 
