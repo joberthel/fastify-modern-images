@@ -75,6 +75,15 @@ describe('negotiation - validatePayload & isStream', () => {
     expect(validatePayload(42, ['foo'], 'bar')).toBe(false)
   })
 
+  it('should validate payload with a pre-normalized Set', () => {
+    const validSet = new Set(['image/jpeg', 'image/png'])
+
+    expect(validatePayload('image/jpeg', validSet, Buffer.from('foo bar'))).toBe(true)
+    expect(validatePayload('  Image/Png ; charset=utf-8 ', validSet, new PassThrough())).toBe(true)
+    expect(validatePayload('image/avif', validSet, Buffer.from('foo bar'))).toBe(false)
+    expect(validatePayload('image/jpeg', validSet, 'foo bar')).toBe(false)
+  })
+
   it('should check if stream', () => {
     expect(isStream(new Stream())).toBe(true)
     expect(isStream(Buffer.from(''))).toBe(false)

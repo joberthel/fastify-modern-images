@@ -10,7 +10,7 @@ import { matchesUrlPattern } from './validation'
 
 async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModernImagesOptions) {
   const options = resolveOptions(opts)
-  const contentTypes = Object.values(options.compression).map(item => item.contentType)
+  const contentTypes = new Set(Object.values(options.compression).map(item => item.contentType.trim().toLowerCase()))
   const inFlight = new Map<string, Promise<CoalescedPipelineResult>>()
   const rembgLimiter = createConcurrencyLimiter(options.rembg.concurrency)
 

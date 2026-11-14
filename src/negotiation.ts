@@ -10,15 +10,17 @@ export function isStream(stream: unknown): stream is Stream {
   return stream !== null && typeof stream === 'object' && 'pipe' in stream && typeof stream.pipe === 'function'
 }
 
-export function validatePayload(contentType: string | string[] | number = '', validContentTypes: string[], payload: unknown): boolean {
+export function validatePayload(contentType: string | string[] | number = '', validContentTypes: ReadonlySet<string> | string[], payload: unknown): boolean {
   if (Array.isArray(contentType) || typeof contentType === 'number') {
     return false
   }
 
   const normalizedContentType = contentType.split(';', 1)[0].trim().toLowerCase()
-  const normalizedValidContentTypes = validContentTypes.map(type => type.trim().toLowerCase())
+  const isValidContentType = Array.isArray(validContentTypes)
+    ? validContentTypes.some(type => type.trim().toLowerCase() === normalizedContentType)
+    : validContentTypes.has(normalizedContentType)
 
-  return normalizedValidContentTypes.includes(normalizedContentType) && (isStream(payload) || Buffer.isBuffer(payload))
+  return isValidContentType && (isStream(payload) || Buffer.isBuffer(payload))
 }
 
 function parseQValue(params: string[]): number {
