@@ -1,13 +1,13 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { Buffer } from 'node:buffer'
-import type { FastifyModernImagesOptions, FastifyModernImagesOptionsCompression, MinifyQuerystring, MinifyRequest } from './types'
+import type { CompressionConfig, FastifyModernImagesOptions, MinifyQuerystring, MinifyRequest, ResolvedFastifyModernImagesOptions } from './types'
 import fp from 'fastify-plugin'
 import merge from 'lodash/merge'
 import sharp from 'sharp'
 import { appendVaryHeader, getBestFormat, guard, isStream, removeBackground, stream2buffer, validatePayload } from './utils'
 import { isNonEmpty, parseBackground, parseDimension, parseFit, parsePosition, parseRotation } from './validation'
 
-const defaults: FastifyModernImagesOptions = {
+const defaults: ResolvedFastifyModernImagesOptions = {
   regex: /.*/,
   quality: '7',
   rembg: {
@@ -149,8 +149,8 @@ async function resolveInputBuffer(
 }
 
 interface EncodeContext {
-  format: FastifyModernImagesOptionsCompression
-  options: FastifyModernImagesOptions
+  format: CompressionConfig
+  options: ResolvedFastifyModernImagesOptions
   inputLength: number
 }
 
@@ -162,20 +162,16 @@ async function encodeAndReply(
 ): Promise<Buffer> {
   const { format, options, inputLength } = context
   const uQuality = request.query.quality ?? request.query.q ?? options.quality
-  const quality = uQuality === undefined
-    ? undefined
-    : format.quality?.[String(uQuality)]
-  const output = await instance.toFormat(format.format!, { ...format.options, quality }).toBuffer()
+  const quality = format.quality[String(uQuality)]
+  const output = await instance.toFormat(format.format, { ...format.options, quality }).toBuffer()
 
   const inputType = String(reply.getHeader('Content-Type') ?? '')
   const reduction = Math.round((1 - output.length / inputLength) * 100)
   request.log.info(
-    `Input: ${inputType}, Output: ${format.contentType ?? ''}, Quality: ${String(quality ?? '')}, Reduction: ${reduction}%)`,
+    `Input: ${inputType}, Output: ${format.contentType}, Quality: ${String(quality ?? '')}, Reduction: ${reduction}%)`,
   )
 
-  if (format.contentType !== undefined) {
-    reply.header('Content-Type', format.contentType)
-  }
+  reply.header('Content-Type', format.contentType)
   reply.header('Content-Length', output.length)
   reply.header('Vary', appendVaryHeader(reply.getHeader('Vary'), 'Accept'))
   reply.removeHeader('etag')
@@ -187,9 +183,9 @@ async function processPayload(
   request: FastifyRequest<MinifyRequest>,
   reply: FastifyReply,
   payload: unknown,
-  options: FastifyModernImagesOptions,
+  options: ResolvedFastifyModernImagesOptions,
 ): Promise<unknown> {
-  const buffer = await resolveInputBuffer(payload, request.query, options.rembg?.model)
+  const buffer = await resolveInputBuffer(payload, request.query, options.rembg.model)
   const instance = sharp(buffer)
 
   if ((request.query.trim ?? request.query.t) !== undefined) {
@@ -197,10 +193,10 @@ async function processPayload(
   }
 
   const metadata = await instance.metadata()
-  const compressionList: FastifyModernImagesOptionsCompression[] = Object.values(options.compression ?? {})
+  const compressionList: CompressionConfig[] = Object.values(options.compression)
   const format = getBestFormat(request.headers.accept, metadata, compressionList)
 
-  if (format === false || format.format === undefined) {
+  if (format === false) {
     const inputType = String(reply.getHeader('Content-Type') ?? '')
     request.log.warn(`No adequate format for image of type "${inputType}" was found.`)
     return buffer
@@ -211,13 +207,11 @@ async function processPayload(
 }
 
 async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModernImagesOptions) {
-  const options: FastifyModernImagesOptions = merge({}, defaults, opts)
-  const contentTypes = Object.values(options.compression ?? {})
-    .map(item => item.contentType)
-    .filter((ct): ct is string => ct !== undefined)
+  const options: ResolvedFastifyModernImagesOptions = merge({}, defaults, opts)
+  const contentTypes = Object.values(options.compression).map(item => item.contentType)
 
   fastify.addHook('onSend', async (request: FastifyRequest<MinifyRequest>, reply, payload) => {
-    if (!guard(options.regex ?? /.*/, request.raw.url) || !validatePayload(reply.getHeader('Content-Type'), contentTypes, payload)) {
+    if (!guard(options.regex, request.raw.url) || !validatePayload(reply.getHeader('Content-Type'), contentTypes, payload)) {
       return payload
     }
 

@@ -1,4 +1,4 @@
-import type { FastifyModernImagesOptionsCompression } from '../src/types'
+import type { CompressionConfig } from '../src/types'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
@@ -10,13 +10,16 @@ vi.mock('node:child_process', () => ({
   spawn: vi.fn(),
 }))
 
-function createFormats(): FastifyModernImagesOptionsCompression[] {
+function createFormats(): CompressionConfig[] {
   return [
     {
       enabled: true,
       format: 'jpeg',
       alpha: false,
       priority: 2,
+      quality: {},
+      options: {},
+      contentType: 'image/jpeg',
       supported: () => true,
     },
     {
@@ -24,6 +27,9 @@ function createFormats(): FastifyModernImagesOptionsCompression[] {
       format: 'avif',
       alpha: true,
       priority: 4,
+      quality: {},
+      options: {},
+      contentType: 'image/avif',
       supported: accept => accept.includes('image/avif'),
     },
     {
@@ -31,6 +37,9 @@ function createFormats(): FastifyModernImagesOptionsCompression[] {
       format: 'webp',
       alpha: true,
       priority: 3,
+      quality: {},
+      options: {},
+      contentType: 'image/webp',
       supported: accept => accept.includes('image/webp'),
     },
     {
@@ -38,6 +47,9 @@ function createFormats(): FastifyModernImagesOptionsCompression[] {
       format: 'png',
       alpha: true,
       priority: 1,
+      quality: {},
+      options: {},
+      contentType: 'image/png',
       supported: () => true,
     },
   ]
@@ -97,12 +109,15 @@ describe('utils - getBestFormat', () => {
     const pngResult = getBestFormat(undefined, { hasAlpha: true }, formats)
     expect(pngResult !== false && pngResult.format).toBe('png')
 
-    const limitedFormats: FastifyModernImagesOptionsCompression[] = [
+    const limitedFormats: CompressionConfig[] = [
       {
         enabled: false,
         format: 'avif',
         alpha: true,
         priority: 4,
+        quality: {},
+        options: {},
+        contentType: 'image/avif',
         supported: accept => accept.includes('image/avif'),
       },
       {
@@ -110,6 +125,9 @@ describe('utils - getBestFormat', () => {
         format: 'webp',
         alpha: true,
         priority: 3,
+        quality: {},
+        options: {},
+        contentType: 'image/webp',
         supported: accept => accept.includes('image/webp'),
       },
     ]

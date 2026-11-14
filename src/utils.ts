@@ -1,6 +1,6 @@
 import type { Stream } from 'node:stream'
 import type { Metadata } from 'sharp'
-import type { FastifyModernImagesOptionsCompression } from './types'
+import type { CompressionConfig } from './types'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 
@@ -29,10 +29,10 @@ export function validatePayload(contentType: string | string[] | number = '', va
   return normalizedValidContentTypes.includes(normalizedContentType) && (isStream(payload) || Buffer.isBuffer(payload))
 }
 
-export function getBestFormat(accept: string = '', metadata: Metadata, formats: FastifyModernImagesOptionsCompression[]): FastifyModernImagesOptionsCompression | false {
+export function getBestFormat(accept: string = '', metadata: Metadata, formats: CompressionConfig[]): CompressionConfig | false {
   const sorted = formats
-    .filter(item => Boolean(item.enabled) && (metadata.hasAlpha !== true || Boolean(item.alpha)) && (item.supported?.(accept) ?? false))
-    .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+    .filter(item => item.enabled && (metadata.hasAlpha !== true || item.alpha) && item.supported(accept))
+    .sort((a, b) => b.priority - a.priority)
 
   if (sorted.length > 0) {
     return sorted[0]

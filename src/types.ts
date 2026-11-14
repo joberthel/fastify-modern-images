@@ -46,6 +46,28 @@ export interface MinifyRequest {
 
 export type ImageFormat = 'avif' | 'webp' | 'jpeg' | 'png'
 
+export interface CompressionConfig {
+  enabled: boolean
+  format: ImageFormat
+  priority: number
+  alpha: boolean
+  quality: Record<string, number>
+  options: Record<string, any>
+  contentType: string
+  supported: (accept: string) => boolean
+}
+
+export interface ResolvedFastifyModernImagesOptions {
+  regex: RegExp
+  quality: string | number
+  rembg: {
+    model: string
+  }
+  compression: Record<string, CompressionConfig>
+}
+
+export type FastifyModernImagesOptionsCompression = Partial<CompressionConfig>
+
 export interface FastifyModernImagesOptions {
   regex?: RegExp
   quality?: string | number
@@ -53,15 +75,4 @@ export interface FastifyModernImagesOptions {
     model?: string
   }
   compression?: Record<string, FastifyModernImagesOptionsCompression>
-}
-
-export interface FastifyModernImagesOptionsCompression {
-  enabled?: boolean
-  format?: ImageFormat
-  priority?: number
-  alpha?: boolean
-  quality?: Record<string, number>
-  options?: Record<string, any>
-  contentType?: string
-  supported?: (accept: string) => boolean
 }
