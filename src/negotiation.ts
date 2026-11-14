@@ -28,31 +28,64 @@ function parseQValue(params: string[]): number {
     if (rawKey?.trim().toLowerCase() === 'q' && rawVal !== undefined) {
       const parsed = Number.parseFloat(rawVal.trim())
       if (!Number.isNaN(parsed)) {
-        q = parsed
+        q = Math.min(1, Math.max(0, parsed))
       }
     }
   }
   return q
 }
 
-export function isMediaTypeAccepted(accept: string, mediaType: string): boolean {
-  if (!accept) {
-    return false
+export function getMediaTypeQuality(acceptHeader: string | undefined, targetMime: string): number {
+  if (acceptHeader === undefined || acceptHeader === '') {
+    return 0
   }
 
-  const target = mediaType.toLowerCase()
-  for (const part of accept.split(',')) {
+  const target = targetMime.trim().toLowerCase()
+  const [targetType] = target.split('/')
+  const typeWildcard = targetType
+    ? `${targetType}/*`
+    : ''
+
+  let exactQ: number | undefined
+  let typeWildcardQ: number | undefined
+  let allWildcardQ: number | undefined
+
+  for (const part of acceptHeader.split(',')) {
     const [rawType, ...params] = part.split(';')
-    if (rawType.trim().toLowerCase() !== target) {
-      continue
-    }
+    const mediaRange = rawType.trim().toLowerCase()
+    const q = parseQValue(params)
 
-    if (parseQValue(params) > 0) {
-      return true
+    if (mediaRange === target) {
+      exactQ = exactQ === undefined
+        ? q
+        : Math.max(exactQ, q)
+    }
+    else if (typeWildcard && mediaRange === typeWildcard) {
+      typeWildcardQ = typeWildcardQ === undefined
+        ? q
+        : Math.max(typeWildcardQ, q)
+    }
+    else if (mediaRange === '*/*') {
+      allWildcardQ = allWildcardQ === undefined
+        ? q
+        : Math.max(allWildcardQ, q)
     }
   }
 
-  return false
+  if (exactQ !== undefined) {
+    return exactQ
+  }
+  if (typeWildcardQ !== undefined) {
+    return typeWildcardQ
+  }
+  if (allWildcardQ !== undefined) {
+    return allWildcardQ
+  }
+  return 0
+}
+
+export function isMediaTypeAccepted(accept: string, mediaType: string): boolean {
+  return getMediaTypeQuality(accept, mediaType) > 0
 }
 
 export function getBestFormat(
@@ -72,7 +105,13 @@ export function getBestFormat(
       && (flattened || !(metadata.format === 'png' && item.format === 'jpeg'))
       && item.supported(accept),
     )
-    .sort((a, b) => b.priority - a.priority)
+    .sort((a, b) => {
+      const qDiff = getMediaTypeQuality(accept, b.contentType) - getMediaTypeQuality(accept, a.contentType)
+      if (qDiff !== 0) {
+        return qDiff
+      }
+      return b.priority - a.priority
+    })
 
   return sorted[0]
 }

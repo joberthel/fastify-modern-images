@@ -6,6 +6,7 @@ import {
   appendVaryHeader,
   computeDerivedEtag,
   getBestFormat,
+  getMediaTypeQuality,
   isMediaTypeAccepted,
   isStream,
   matchesIfNoneMatch,
@@ -145,6 +146,21 @@ describe('negotiation - getBestFormat', () => {
     const flattenedResult = getBestFormat('image/jpeg', { format: 'png', hasAlpha: true }, formats, true)
     expect(flattenedResult?.format).toBe('jpeg')
   })
+
+  it('should respect client Accept q-factor weights before breaking ties with priority', () => {
+    const formats = createFormats().map(f => (f.format === 'avif'
+      ? { ...f, enabled: true }
+      : f))
+
+    const webpPreferred = getBestFormat('image/webp;q=1.0, image/avif;q=0.1', { hasAlpha: false }, formats)
+    expect(webpPreferred?.format).toBe('webp')
+
+    const tieBrokenByPriority = getBestFormat('image/webp;q=0.8, image/avif;q=0.8', { hasAlpha: false }, formats)
+    expect(tieBrokenByPriority?.format).toBe('avif')
+
+    const clampedQ = getBestFormat('image/webp;q=1.5, image/avif;q=1.0', { hasAlpha: false }, formats)
+    expect(clampedQ?.format).toBe('avif')
+  })
 })
 
 describe('negotiation - isMediaTypeAccepted', () => {
@@ -158,6 +174,14 @@ describe('negotiation - isMediaTypeAccepted', () => {
     expect(isMediaTypeAccepted('IMAGE/AVIF;Q=0.8', 'image/avif')).toBe(true)
     expect(isMediaTypeAccepted('image/avif;q=0, image/webp;q=0.8', 'image/avif')).toBe(false)
     expect(isMediaTypeAccepted('image/avif;q=0, image/webp;q=0.8', 'image/webp')).toBe(true)
+  })
+
+  it('should clamp q-values to [0, 1] and respect specificity in getMediaTypeQuality', () => {
+    expect(getMediaTypeQuality('image/webp;q=1.5', 'image/webp')).toBe(1)
+    expect(getMediaTypeQuality('image/webp;q=-0.5', 'image/webp')).toBe(0)
+    expect(getMediaTypeQuality('image/webp;q=0.4, image/*;q=0.8, */*;q=0.9', 'image/webp')).toBe(0.4)
+    expect(getMediaTypeQuality('image/*;q=0.8, */*;q=0.9', 'image/webp')).toBe(0.8)
+    expect(getMediaTypeQuality('*/*;q=0.9', 'image/webp')).toBe(0.9)
   })
 })
 
