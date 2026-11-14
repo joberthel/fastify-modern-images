@@ -88,6 +88,24 @@ export function isMediaTypeAccepted(accept: string, mediaType: string): boolean 
   return getMediaTypeQuality(accept, mediaType) > 0
 }
 
+function isMediaTypeExplicitlyAccepted(acceptHeader: string, targetMime: string): boolean {
+  if (!acceptHeader) {
+    return false
+  }
+  const target = targetMime.trim().toLowerCase()
+  let exactQ: number | undefined
+  for (const part of acceptHeader.split(',')) {
+    const [rawType, ...params] = part.split(';')
+    if (rawType.trim().toLowerCase() === target) {
+      const q = parseQValue(params)
+      exactQ = exactQ === undefined
+        ? q
+        : Math.max(exactQ, q)
+    }
+  }
+  return exactQ !== undefined && exactQ > 0
+}
+
 export function getBestFormat(
   accept: string = '',
   metadata: Metadata,
@@ -95,14 +113,15 @@ export function getBestFormat(
   flattened: boolean = false,
 ): CompressionConfig | undefined {
   const hasAlpha = !flattened && metadata.hasAlpha === true
-  // Prevent opaque PNGs from converting to lossy JPEG when modern formats
-  // (avif/webp) are not accepted, unless the caller explicitly flattened the
-  // image with a background color.
+  const allowsJpegForPng = flattened || isMediaTypeExplicitlyAccepted(accept, 'image/jpeg')
+  // Prevent opaque PNGs from converting to lossy JPEG by default when modern
+  // formats (avif/webp) are not accepted, unless the caller flattened the image
+  // or the client explicitly accepts image/jpeg.
   const sorted = formats
     .filter(item =>
       item.enabled
       && (!hasAlpha || item.alpha)
-      && (flattened || !(metadata.format === 'png' && item.format === 'jpeg'))
+      && (allowsJpegForPng || !(metadata.format === 'png' && item.format === 'jpeg'))
       && item.supported(accept),
     )
     .sort((a, b) => {

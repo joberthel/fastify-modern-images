@@ -137,6 +137,16 @@ describe('negotiation - getBestFormat', () => {
     expect(jpegResult?.format).toBe('jpeg')
   })
 
+  it('should allow jpeg for opaque png when client explicitly accepts image/jpeg', () => {
+    const formats = createFormats()
+
+    const jpegAcceptedResult = getBestFormat('image/jpeg', { format: 'png', hasAlpha: false }, formats)
+    expect(jpegAcceptedResult?.format).toBe('jpeg')
+
+    const imageWildcardResult = getBestFormat('image/*', { format: 'png', hasAlpha: false }, formats)
+    expect(imageWildcardResult?.format).toBe('png')
+  })
+
   it('should allow jpeg for alpha png when flattened is true', () => {
     const formats = createFormats()
 
