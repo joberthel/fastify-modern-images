@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer'
 import { PassThrough } from 'node:stream'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveOptions } from '../src/config'
+import * as negotiation from '../src/negotiation'
 import { computeDerivedEtag } from '../src/negotiation'
 import { InputLimitExceededError, isFatalInputLimitError, processedReplies, processPayload } from '../src/pipeline'
 import { normalizeTransformParams, parseQuality } from '../src/validation'
@@ -128,6 +129,12 @@ describe('pipeline - 304 Not Modified short-circuit', () => {
         enabled: true,
         allowedModels: ['u2net'],
       },
+      compression: {
+        avif: { enabled: true },
+        webp: { enabled: false },
+        jpeg: { enabled: false },
+        png: { enabled: false },
+      },
     })
     const upstreamEtag = '"abc123"'
     const params = normalizeTransformParams({}, options.maxDimension, options.allowedDimensions)
@@ -156,6 +163,43 @@ describe('pipeline - 304 Not Modified short-circuit', () => {
     expect(readStreamWithLimitMock).toHaveBeenCalledTimes(1)
     expect(removeBackgroundMock).toHaveBeenCalledTimes(1)
     expect(reply.code).not.toHaveBeenCalledWith(304)
+    expect(result).toBe(inputBuffer)
+  })
+
+  it('returns original inputBuffer when getBestFormat returns undefined after removeBackground', async () => {
+    const options = resolveOptions({
+      rembg: {
+        enabled: true,
+        allowedModels: ['u2net'],
+      },
+    })
+
+    const inputBuffer = Buffer.from('raw-jpeg-bytes')
+    const rembgPngBuffer = Buffer.from('rembg-png-bytes')
+    readStreamWithLimitMock.mockResolvedValueOnce(inputBuffer)
+    removeBackgroundMock.mockResolvedValueOnce(rembgPngBuffer)
+    sharpMock.mockReturnValueOnce({
+      metadata: vi.fn().mockResolvedValue({ width: 100, height: 100, format: 'png' }),
+    })
+    vi.spyOn(negotiation, 'getBestFormat').mockReturnValueOnce(undefined)
+
+    const stream = new PassThrough()
+    const reply = createMockReply('"etag-1"')
+    const request = {
+      headers: {
+        accept: 'image/avif,image/webp,*/*',
+      },
+      query: { ai: 'u2net' },
+      log: {
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+
+    const result = await processPayload(request as never, reply as never, stream, options)
+
+    expect(removeBackgroundMock).toHaveBeenCalledTimes(1)
+    expect(request.log.warn).toHaveBeenCalledTimes(1)
     expect(result).toBe(inputBuffer)
   })
 })

@@ -295,7 +295,7 @@ export async function processPayload(
     if (format === undefined) {
       const inputType = String(reply.getHeader('Content-Type') ?? '')
       request.log.warn(`No adequate format for image of type "${inputType}" was found.`)
-      return buffer
+      return inputBuffer
     }
 
     const quality = parseQuality(request.query.quality ?? request.query.q, format.quality, options.quality)
