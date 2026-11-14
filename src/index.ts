@@ -3,9 +3,8 @@ import type { Buffer } from 'node:buffer'
 import type { CompressionConfig, FastifyModernImagesOptions, MinifyQuerystring, MinifyRequest, ResolvedFastifyModernImagesOptions } from './types'
 import { buffer as streamToBuffer } from 'node:stream/consumers'
 import fp from 'fastify-plugin'
-import merge from 'lodash/merge'
 import sharp from 'sharp'
-import { appendVaryHeader, getBestFormat, guard, isStream, removeBackground, validatePayload } from './utils'
+import { appendVaryHeader, deepMerge, getBestFormat, guard, isStream, removeBackground, validatePayload } from './utils'
 import { isNonEmpty, parseBackground, parseDimension, parseFit, parsePosition, parseRotation } from './validation'
 
 const defaults: ResolvedFastifyModernImagesOptions = {
@@ -208,7 +207,7 @@ async function processPayload(
 }
 
 async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModernImagesOptions) {
-  const options: ResolvedFastifyModernImagesOptions = merge({}, defaults, opts)
+  const options: ResolvedFastifyModernImagesOptions = deepMerge(defaults, opts)
   const contentTypes = Object.values(options.compression).map(item => item.contentType)
 
   fastify.addHook('onSend', async (request: FastifyRequest<MinifyRequest>, reply, payload) => {

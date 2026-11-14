@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { PassThrough, Stream } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import { appendVaryHeader, getBestFormat, guard, isStream, removeBackground, validatePayload } from '../src/utils'
+import { appendVaryHeader, deepMerge, getBestFormat, guard, isStream, removeBackground, validatePayload } from '../src/utils'
 
 vi.mock('node:child_process', () => ({
   spawn: vi.fn(),
@@ -240,5 +240,95 @@ describe('appendVaryHeader', () => {
     expect(appendVaryHeader('Accept', 'Accept')).toBe('Accept')
     expect(appendVaryHeader('Origin, accept', 'Accept')).toBe('Origin, accept')
     expect(appendVaryHeader(['Origin', 'ACCEPT'], 'Accept')).toBe('Origin, ACCEPT')
+  })
+})
+
+describe('deepMerge', () => {
+  it('merges nested plain objects without mutating inputs', () => {
+    const defaults = {
+      quality: '7',
+      compression: {
+        jpeg: {
+          enabled: true,
+          options: { quality: 80 },
+        },
+        webp: {
+          enabled: true,
+          options: { quality: 75 },
+        },
+      },
+    }
+    const overrides = {
+      compression: {
+        jpeg: {
+          options: { quality: 90 },
+        },
+      },
+    }
+
+    const merged = deepMerge(defaults, overrides)
+
+    expect(merged).toEqual({
+      quality: '7',
+      compression: {
+        jpeg: {
+          enabled: true,
+          options: { quality: 90 },
+        },
+        webp: {
+          enabled: true,
+          options: { quality: 75 },
+        },
+      },
+    })
+    expect(defaults.compression.jpeg.options.quality).toBe(80)
+    expect(merged.compression).not.toBe(defaults.compression)
+    expect(merged.compression.webp).not.toBe(defaults.compression.webp)
+    expect(merged.compression.jpeg.options).not.toBe(overrides.compression.jpeg.options)
+  })
+
+  it('preserves RegExp, functions, primitives, and arrays without recursing into them', () => {
+    const regex = /^\/images\//i
+    const supported = (accept: string) => accept.includes('image/webp')
+    const tags = ['a', 'b']
+    const defaults = {
+      regex: /.*/,
+      supported: () => false,
+      tags: ['x'],
+    }
+
+    const merged = deepMerge(defaults, { regex, supported, tags })
+
+    expect(merged.regex).toBe(regex)
+    expect(merged.supported).toBe(supported)
+    expect(merged.tags).toBe(tags)
+  })
+
+  it('skips undefined source values and undefined sources', () => {
+    const defaults = {
+      quality: '7',
+      nested: { a: 1, b: 2 },
+    }
+
+    const merged = deepMerge(defaults, undefined, {
+      quality: undefined,
+      nested: { a: undefined, b: 3 },
+    })
+
+    expect(merged).toEqual({
+      quality: '7',
+      nested: { a: 1, b: 3 },
+    })
+  })
+
+  it('handles null-prototype plain objects', () => {
+    const nullProto = Object.assign(Object.create(null), { a: 1, b: 2 }) as Record<string, number>
+    const merged = deepMerge({ nested: nullProto }, {
+      nested: { b: 3 },
+    })
+
+    expect(merged).toEqual({
+      nested: { a: 1, b: 3 },
+    })
   })
 })

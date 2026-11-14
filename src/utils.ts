@@ -126,3 +126,54 @@ export function appendVaryHeader(
 
   return parts.join(', ')
 }
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  const proto: unknown = Object.getPrototypeOf(value)
+  return proto === Object.prototype || proto === null
+}
+
+function mergeInto(result: Record<string, unknown>, source: Record<string, unknown>): void {
+  for (const [key, value] of Object.entries(source)) {
+    if (key === '__proto__' || value === undefined) {
+      continue
+    }
+
+    const existing = result[key]
+    if (isPlainObject(value) && isPlainObject(existing)) {
+      result[key] = deepMerge(existing, value)
+    }
+    else if (isPlainObject(value)) {
+      result[key] = deepMerge(value)
+    }
+    else {
+      result[key] = value
+    }
+  }
+}
+
+export function deepMerge<T extends object>(
+  target: T,
+  ...sources: Array<object | undefined>
+): T {
+  const result: Record<string, unknown> = {}
+
+  for (const [key, value] of Object.entries(target as Record<string, unknown>)) {
+    if (key === '__proto__') {
+      continue
+    }
+    result[key] = isPlainObject(value)
+      ? deepMerge(value)
+      : value
+  }
+
+  for (const source of sources) {
+    if (source) {
+      mergeInto(result, source as Record<string, unknown>)
+    }
+  }
+
+  return result as T
+}
