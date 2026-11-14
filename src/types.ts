@@ -29,15 +29,15 @@ export interface MinifyQuerystring {
   ai?: string
   trim?: string
   /** Shortcuts */
-  q: MinifyQuerystring['quality']
-  w: MinifyQuerystring['width']
-  h: MinifyQuerystring['height']
-  f: MinifyQuerystring['fit']
-  p: MinifyQuerystring['position']
-  b: MinifyQuerystring['background']
-  r: MinifyQuerystring['rotation']
-  a: MinifyQuerystring['ai']
-  t: MinifyQuerystring['trim']
+  q?: MinifyQuerystring['quality']
+  w?: MinifyQuerystring['width']
+  h?: MinifyQuerystring['height']
+  f?: MinifyQuerystring['fit']
+  p?: MinifyQuerystring['position']
+  b?: MinifyQuerystring['background']
+  r?: MinifyQuerystring['rotation']
+  a?: MinifyQuerystring['ai']
+  t?: MinifyQuerystring['trim']
 }
 
 export interface MinifyRequest {
