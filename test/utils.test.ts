@@ -535,6 +535,16 @@ describe('negotiation - computeDerivedEtag & matchesIfNoneMatch', () => {
     expect(e1).not.toBe(e4)
   })
 
+  it('produces the same ETag for disallowed dimensions as omitted dimensions when allowedDimensions is set', () => {
+    const allowed = [40, 80]
+    const omitted = computeDerivedEtag('"abc"', 'webp', 80, {}, undefined, undefined, allowed)
+    const disallowed = computeDerivedEtag('"abc"', 'webp', 80, { w: '50' }, undefined, undefined, allowed)
+    const allowedMatch = computeDerivedEtag('"abc"', 'webp', 80, { w: '40' }, undefined, undefined, allowed)
+
+    expect(disallowed).toBe(omitted)
+    expect(allowedMatch).not.toBe(omitted)
+  })
+
   it('matches If-None-Match headers with weak comparison, lists, and wildcard', () => {
     const etag = 'W/"xyz123"'
     expect(matchesIfNoneMatch(undefined, etag)).toBe(false)

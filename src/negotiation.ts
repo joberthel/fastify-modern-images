@@ -1,9 +1,10 @@
 import type { Stream } from 'node:stream'
 import type { Metadata } from 'sharp'
 import type { CompressionConfig, ImageTransformQuerystring } from './types'
+import type { NormalizedTransformParams } from './validation'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
-import { parseBackground, parseDimension, parseFit, parsePosition, parseRotation, parseTrim } from './validation'
+import { normalizeTransformParams } from './validation'
 
 export function isStream(stream: unknown): stream is Stream {
   return stream !== null && typeof stream === 'object' && 'pipe' in stream && typeof stream.pipe === 'function'
@@ -98,25 +99,35 @@ export function appendVaryHeader(
   return parts.join(', ')
 }
 
+function isNormalizedTransformParams(
+  value: ImageTransformQuerystring | NormalizedTransformParams,
+): value is NormalizedTransformParams {
+  return typeof value.trim === 'boolean' && (value.width === null || typeof value.width === 'number')
+}
+
 export function computeDerivedEtag(
   upstreamEtag: string,
   format: string,
   quality: number | undefined,
-  query: ImageTransformQuerystring,
+  queryOrParams: ImageTransformQuerystring | NormalizedTransformParams,
   aiModel?: string,
   maxDimension?: number,
+  allowedDimensions?: number[],
 ): string {
+  const params = isNormalizedTransformParams(queryOrParams)
+    ? queryOrParams
+    : normalizeTransformParams(queryOrParams, maxDimension, allowedDimensions)
   const normalized = {
     upstreamEtag,
     format,
     quality: quality ?? null,
-    width: parseDimension(query.width ?? query.w, maxDimension),
-    height: parseDimension(query.height ?? query.h, maxDimension),
-    fit: parseFit(query.fit ?? query.f) ?? null,
-    position: parsePosition(query.position ?? query.p) ?? null,
-    background: parseBackground(query.background ?? query.b) ?? null,
-    rotation: parseRotation(query.rotation ?? query.r) ?? null,
-    trim: parseTrim(query.trim ?? query.t),
+    width: params.width,
+    height: params.height,
+    fit: params.fit ?? null,
+    position: params.position ?? null,
+    background: params.background ?? null,
+    rotation: params.rotation ?? null,
+    trim: params.trim,
     ai: aiModel ?? null,
   }
   const digest = createHash('sha256')

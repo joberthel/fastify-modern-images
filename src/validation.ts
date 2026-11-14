@@ -152,6 +152,32 @@ export function parseQuality(
   return undefined
 }
 
+export interface NormalizedTransformParams {
+  width: number | null
+  height: number | null
+  fit: NonNullable<ImageTransformQuerystring['fit']>
+  position: string
+  background: string | undefined
+  rotation: number | undefined
+  trim: boolean
+}
+
+export function normalizeTransformParams(
+  query: ImageTransformQuerystring,
+  maxDimension?: number,
+  allowedDimensions?: number[],
+): NormalizedTransformParams {
+  return {
+    width: parseDimension(query.width ?? query.w, maxDimension, allowedDimensions),
+    height: parseDimension(query.height ?? query.h, maxDimension, allowedDimensions),
+    fit: parseFit(query.fit ?? query.f),
+    position: parsePosition(query.position ?? query.p),
+    background: parseBackground(query.background ?? query.b),
+    rotation: parseRotation(query.rotation ?? query.r),
+    trim: parseTrim(query.trim ?? query.t),
+  }
+}
+
 export function matchesUrlPattern(pattern: RegExp, urlPath: string = '/'): boolean {
   pattern.lastIndex = 0
   return pattern.test(urlPath)
