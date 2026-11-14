@@ -48,7 +48,7 @@ export type ImageFormat = 'avif' | 'webp' | 'jpeg' | 'png'
 
 export interface FastifyModernImagesOptions {
   regex?: RegExp
-  quality?: string
+  quality?: string | number
   rembg?: {
     model?: string
   }

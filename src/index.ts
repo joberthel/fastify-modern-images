@@ -164,7 +164,7 @@ async function encodeAndReply(
   const uQuality = request.query.quality ?? request.query.q ?? options.quality
   const quality = uQuality === undefined
     ? undefined
-    : format.quality?.[uQuality]
+    : format.quality?.[String(uQuality)]
   const output = await instance.toFormat(format.format!, { ...format.options, quality }).toBuffer()
 
   const inputType = String(reply.getHeader('Content-Type') ?? '')
