@@ -1,4 +1,4 @@
-name: Test and Publish
+name: Test
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  test_and_publish:
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -54,14 +54,3 @@ jobs:
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
-
-      # - name: Publish to npm
-      #   if: github.ref == 'refs/heads/main'
-      #   run: |
-      #     export COMMIT_MESSAGE="${{ github.event.head_commit.message }}"
-      #     if [[ $COMMIT_MESSAGE == *"[skip npm]"* ]]; then
-      #       echo "Skipping npm publish."
-      #     else
-      #       echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > .npmrc
-      #       pnpm publish
-      #     fi
