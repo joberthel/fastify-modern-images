@@ -129,6 +129,29 @@ describe('fastifyModernImages unit tests - passthrough and input', () => {
     spy.mockRestore()
   })
 
+  it('measures reduction against original inputLength before removeBackground', async () => {
+    const spy = vi.spyOn(utils, 'removeBackground').mockResolvedValue(Buffer.from('no-bg'))
+    const onSend = await registerPlugin({
+      rembg: { enabled: true, model: 'u2net' },
+    })
+
+    // Original input is 14 bytes ('original-image'), output from mock sharp is 7 bytes ('encoded') -> 50% reduction
+    // If measured after removeBackground ('no-bg' = 5 bytes), it would be -40%
+    const request = createRequest({
+      query: { ai: '' },
+    })
+    await onSend(request, createReply(), Buffer.from('original-image'))
+    expect(request.log.info).toHaveBeenCalledWith(expect.stringContaining('Reduction: 50%'))
+    spy.mockRestore()
+  })
+
+  it('logs 0% reduction when inputLength is 0', async () => {
+    const onSend = await registerPlugin()
+    const request = createRequest()
+    await onSend(request, createReply(), Buffer.alloc(0))
+    expect(request.log.info).toHaveBeenCalledWith(expect.stringContaining('Reduction: 0%'))
+  })
+
   it('ignores non-string ai/a query values (e.g. array pollution) when rembg is enabled', async () => {
     const spy = vi.spyOn(utils, 'removeBackground').mockResolvedValue(Buffer.from('no-bg'))
     const onSend = await registerPlugin({

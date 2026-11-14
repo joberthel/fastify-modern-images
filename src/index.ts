@@ -135,25 +135,27 @@ async function resolveInputBuffer(
   payload: unknown,
   query: MinifyQuerystring,
   rembg: RembgOptions,
-): Promise<Buffer> {
-  const buffer = isStream(payload)
+): Promise<{ buffer: Buffer, inputLength: number }> {
+  const inputBuffer = isStream(payload)
     ? await streamToBuffer(payload as unknown as NodeJS.ReadableStream)
     : payload as Buffer
+  const inputLength = inputBuffer.length
 
   const ai = query.ai ?? query.a
   if (!rembg.enabled || typeof ai !== 'string') {
-    return buffer
+    return { buffer: inputBuffer, inputLength }
   }
 
   const model = ai.length > 0
     ? ai
     : rembg.model
-  return removeBackground(buffer, model, {
+  const buffer = await removeBackground(inputBuffer, model, {
     allowedModels: rembg.allowedModels,
     timeoutMs: rembg.timeoutMs,
     concurrency: rembg.concurrency,
     endpoint: rembg.endpoint,
   })
+  return { buffer, inputLength }
 }
 
 interface EncodeContext {
@@ -173,7 +175,9 @@ async function encodeAndReply(
   const output = await instance.toFormat(format.format, { ...format.options, quality }).toBuffer()
 
   const inputType = String(reply.getHeader('Content-Type') ?? '')
-  const reduction = Math.round((1 - output.length / inputLength) * 100)
+  const reduction = inputLength > 0
+    ? Math.round((1 - output.length / inputLength) * 100)
+    : 0
   request.log.info(
     `Input: ${inputType}, Output: ${format.contentType}, Quality: ${String(quality ?? '')}, Reduction: ${reduction}%`,
   )
@@ -201,7 +205,7 @@ async function processPayload(
     return payload
   }
 
-  const buffer = await resolveInputBuffer(payload, request.query, options.rembg)
+  const { buffer, inputLength } = await resolveInputBuffer(payload, request.query, options.rembg)
   const instance = sharp(buffer)
 
   if ((request.query.trim ?? request.query.t) !== undefined) {
@@ -219,7 +223,7 @@ async function processPayload(
   }
 
   applySharpTransforms(instance, request.query)
-  return encodeAndReply(instance, request, reply, { format, options, inputLength: buffer.length })
+  return encodeAndReply(instance, request, reply, { format, options, inputLength })
 }
 
 async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModernImagesOptions) {
