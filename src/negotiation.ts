@@ -113,13 +113,14 @@ export function computeDerivedEtag(
   quality: number | undefined,
   query: MinifyQuerystring,
   aiModel?: string,
+  maxDimension?: number,
 ): string {
   const normalized = {
     upstreamEtag,
     format,
     quality: quality ?? null,
-    width: parseDimension(query.width ?? query.w),
-    height: parseDimension(query.height ?? query.h),
+    width: parseDimension(query.width ?? query.w, maxDimension),
+    height: parseDimension(query.height ?? query.h, maxDimension),
     fit: parseFit(query.fit ?? query.f) ?? null,
     position: parsePosition(query.position ?? query.p) ?? null,
     background: parseBackground(query.background ?? query.b) ?? null,

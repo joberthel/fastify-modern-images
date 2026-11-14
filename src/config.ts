@@ -1,9 +1,12 @@
 import type { FastifyModernImagesOptions, ResolvedFastifyModernImagesOptions } from './types'
 import { isMediaTypeAccepted } from './negotiation'
+import { MAX_DIMENSION } from './validation'
 
 export const defaults: ResolvedFastifyModernImagesOptions = {
   regex: /.*/,
   quality: '7',
+  maxDimension: MAX_DIMENSION,
+  withoutEnlargement: true,
   rembg: {
     enabled: false,
     model: 'isnet-general-use',

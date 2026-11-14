@@ -1,6 +1,6 @@
 import type { MinifyQuerystring } from './types'
 
-export const MAX_DIMENSION = 16384
+export const MAX_DIMENSION = 4096
 
 const VALID_FIT_VALUES = new Set<NonNullable<MinifyQuerystring['fit']>>([
   'cover',
@@ -80,12 +80,12 @@ export function parseTrim(value?: unknown): boolean {
   return normalized !== 'false' && normalized !== '0'
 }
 
-export function parseDimension(value?: string): number | null {
+export function parseDimension(value?: string, maxDimension = MAX_DIMENSION): number | null {
   if (!isNonEmpty(value) || !/^\d+$/.test(value)) {
     return null
   }
   const parsed = Number.parseInt(value, 10)
-  if (!Number.isFinite(parsed) || parsed < 1 || parsed > MAX_DIMENSION) {
+  if (!Number.isFinite(parsed) || parsed < 1 || parsed > maxDimension) {
     return null
   }
   return parsed

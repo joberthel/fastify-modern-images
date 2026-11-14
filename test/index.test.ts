@@ -204,7 +204,12 @@ describe('fastifyModernImages unit tests - transforms and encoding', () => {
     expect(result).toEqual(Buffer.from('encoded'))
     expect(mockSharpInstance.trim).toHaveBeenCalledTimes(1)
     expect(mockSharpInstance.rotate).toHaveBeenCalledWith(90, { background: 'red' })
-    expect(mockSharpInstance.resize).toHaveBeenCalledWith(100, 200, { fit: 'contain', position: 'top', background: 'red' })
+    expect(mockSharpInstance.resize).toHaveBeenCalledWith(100, 200, {
+      fit: 'contain',
+      position: 'top',
+      background: 'red',
+      withoutEnlargement: true,
+    })
     expect(mockSharpInstance.flatten).toHaveBeenCalledWith({ background: 'red' })
     expect(mockSharpInstance.toFormat).toHaveBeenCalledWith('webp', { quality: 93 })
     expect(reply.header).toHaveBeenCalledWith('Content-Type', 'image/webp')
@@ -388,5 +393,22 @@ describe('fastifyModernImages unit tests - transforms and encoding', () => {
     await onSend(createRequest(), createReply('image/jpeg'), raw)
 
     expect(sharpMock).toHaveBeenCalledWith(raw, sharpInputOptions)
+  })
+
+  it('respects custom maxDimension and withoutEnlargement options', async () => {
+    const onSend = await registerPlugin({ maxDimension: 500, withoutEnlargement: false })
+    await onSend(
+      createRequest({
+        query: { width: '500', height: '501' },
+      }),
+      createReply('image/jpeg'),
+      Buffer.from('raw'),
+    )
+    expect(mockSharpInstance.resize).toHaveBeenCalledWith(500, null, {
+      fit: 'cover',
+      position: 'centre',
+      background: undefined,
+      withoutEnlargement: false,
+    })
   })
 })

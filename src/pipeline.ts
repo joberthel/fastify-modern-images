@@ -9,9 +9,14 @@ import { isNonEmpty, parseBackground, parseDimension, parseFit, parsePosition, p
 
 export const processedReplies = new WeakSet<FastifyReply>()
 
-function applyResize(instance: sharp.Sharp, query: MinifyQuerystring, background?: string): void {
-  const width = parseDimension(query.width ?? query.w)
-  const height = parseDimension(query.height ?? query.h)
+function applyResize(
+  instance: sharp.Sharp,
+  query: MinifyQuerystring,
+  options: Pick<ResolvedFastifyModernImagesOptions, 'maxDimension' | 'withoutEnlargement'>,
+  background?: string,
+): void {
+  const width = parseDimension(query.width ?? query.w, options.maxDimension)
+  const height = parseDimension(query.height ?? query.h, options.maxDimension)
 
   if (width === null && height === null) {
     return
@@ -21,17 +26,22 @@ function applyResize(instance: sharp.Sharp, query: MinifyQuerystring, background
     fit: parseFit(query.fit ?? query.f),
     position: parsePosition(query.position ?? query.p),
     background,
+    withoutEnlargement: options.withoutEnlargement,
   })
 }
 
-function applySharpTransforms(instance: sharp.Sharp, query: MinifyQuerystring): void {
+function applySharpTransforms(
+  instance: sharp.Sharp,
+  query: MinifyQuerystring,
+  options: Pick<ResolvedFastifyModernImagesOptions, 'maxDimension' | 'withoutEnlargement'>,
+): void {
   const background = parseBackground(query.background ?? query.b)
   const rotation = parseRotation(query.rotation ?? query.r)
 
   // Called unconditionally so sharp auto-orients images from their EXIF orientation tag
   // when rotation is undefined, before EXIF metadata is stripped on output.
   instance.rotate(rotation, { background })
-  applyResize(instance, query, background)
+  applyResize(instance, query, options, background)
 
   if (isNonEmpty(background)) {
     instance.flatten({ background })
@@ -78,10 +88,11 @@ async function encodeWithCoalescing(
   request: FastifyRequest<MinifyRequest>,
   format: CompressionConfig,
   quality: number | undefined,
+  options: ResolvedFastifyModernImagesOptions,
   inFlight?: Map<string, Promise<Buffer>>,
 ): Promise<Buffer> {
   const runEncode = async (): Promise<Buffer> => {
-    applySharpTransforms(instance, request.query)
+    applySharpTransforms(instance, request.query, options)
     return instance.toFormat(format.format, { ...format.options, quality }).toBuffer()
   }
 
@@ -113,8 +124,8 @@ async function encodeAndReply(
   context: EncodeContext,
   inFlight?: Map<string, Promise<Buffer>>,
 ): Promise<Buffer> {
-  const { format, inputLength, quality, derivedEtag } = context
-  const output = await encodeWithCoalescing(instance, request, format, quality, inFlight)
+  const { format, options, inputLength, quality, derivedEtag } = context
+  const output = await encodeWithCoalescing(instance, request, format, quality, options, inFlight)
 
   const inputType = String(reply.getHeader('Content-Type') ?? '')
   const reduction = inputLength > 0
@@ -181,7 +192,7 @@ export async function processPayload(
     : undefined
   const upstreamEtag = reply.getHeader('etag')
   const derivedEtag = typeof upstreamEtag === 'string' && upstreamEtag.length > 0
-    ? computeDerivedEtag(upstreamEtag, format.format, quality, request.query, aiModel)
+    ? computeDerivedEtag(upstreamEtag, format.format, quality, request.query, aiModel, options.maxDimension)
     : undefined
 
   if (derivedEtag !== undefined && matchesIfNoneMatch(request.headers['if-none-match'], derivedEtag)) {

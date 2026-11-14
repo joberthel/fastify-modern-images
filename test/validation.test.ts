@@ -14,9 +14,11 @@ import {
 describe('validation helpers', () => {
   describe('parseDimension', () => {
     it('accepts positive integers within bounds', () => {
+      expect(MAX_DIMENSION).toBe(4096)
       expect(parseDimension('1')).toBe(1)
       expect(parseDimension('200')).toBe(200)
       expect(parseDimension(String(MAX_DIMENSION))).toBe(MAX_DIMENSION)
+      expect(parseDimension('8192', 8192)).toBe(8192)
     })
 
     it('rejects zero, negative, oversized, and non-numeric values', () => {
@@ -26,6 +28,7 @@ describe('validation helpers', () => {
       expect(parseDimension('-10')).toBeNull()
       expect(parseDimension('999999999')).toBeNull()
       expect(parseDimension(String(MAX_DIMENSION + 1))).toBeNull()
+      expect(parseDimension('501', 500)).toBeNull()
       expect(parseDimension('abc')).toBeNull()
       expect(parseDimension('150px')).toBeNull()
       expect(parseDimension('100.5')).toBeNull()
