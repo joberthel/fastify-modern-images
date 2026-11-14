@@ -3,9 +3,8 @@ import fs from 'node:fs/promises'
 import http from 'node:http'
 import path from 'node:path'
 import fastifyStatic from '@fastify/static'
-import { expect } from 'chai'
 import fastify from 'fastify'
-import { after, before, describe, it } from 'mocha'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import fastifyModernImages from '../src'
 
@@ -61,84 +60,84 @@ async function createDefaultServer(): Promise<FastifyInstance> {
 describe('default behaviour - formats', () => {
   let server: FastifyInstance
 
-  before(async () => {
+  beforeAll(async () => {
     server = await createDefaultServer()
   })
 
-  after(async () => {
+  afterAll(async () => {
     await sleep(10)
     await server.close()
   })
 
   it('should return avif', async () => {
-    expect(await fetch('/test.jpg', 'image/avif,image/webp')).to.eq('image/avif')
+    expect(await fetch('/test.jpg', 'image/avif,image/webp')).toBe('image/avif')
   })
 
   it('should return webp', async () => {
-    expect(await fetch('/test.jpg', 'image/webp')).to.eq('image/webp')
+    expect(await fetch('/test.jpg', 'image/webp')).toBe('image/webp')
   })
 
   it('should return jpeg', async () => {
-    expect(await fetch('/test.jpg')).to.eq('image/jpeg')
+    expect(await fetch('/test.jpg')).toBe('image/jpeg')
   })
 
   it('should return png', async () => {
-    expect(await fetch('/test-alpha.png')).to.eq('image/png')
+    expect(await fetch('/test-alpha.png')).toBe('image/png')
   })
 
   it('should work with buffer', async () => {
-    expect(await fetch('/buffer.jpg', 'image/avif,image/webp')).to.eq('image/avif')
+    expect(await fetch('/buffer.jpg', 'image/avif,image/webp')).toBe('image/avif')
   })
 })
 
 describe('default behaviour - transformations', () => {
   let server: FastifyInstance
 
-  before(async () => {
+  beforeAll(async () => {
     server = await createDefaultServer()
   })
 
-  after(async () => {
+  afterAll(async () => {
     await sleep(10)
     await server.close()
   })
 
   it('should return jpeg with transformation', async () => {
-    expect(await fetch('/test.jpg?width=150')).to.eq('image/jpeg')
-    expect(await fetch('/test.jpg?height=150')).to.eq('image/jpeg')
-    expect(await fetch('/test.jpg?width=150&height=150&fit=contain')).to.eq('image/jpeg')
-    expect(await fetch('/test.jpg?width=150&height=150&position=left')).to.eq('image/jpeg')
+    expect(await fetch('/test.jpg?width=150')).toBe('image/jpeg')
+    expect(await fetch('/test.jpg?height=150')).toBe('image/jpeg')
+    expect(await fetch('/test.jpg?width=150&height=150&fit=contain')).toBe('image/jpeg')
+    expect(await fetch('/test.jpg?width=150&height=150&position=left')).toBe('image/jpeg')
   })
 
   it('should return jpeg with transformation and background', async () => {
-    expect(await fetch('/test.jpg?width=800&height=200&fit=contain&background=white')).to.eq('image/jpeg')
+    expect(await fetch('/test.jpg?width=800&height=200&fit=contain&background=white')).toBe('image/jpeg')
   })
 
   it('should return jpeg with rotation', async () => {
-    expect(await fetch('/test.jpg?rotation=45')).to.eq('image/jpeg')
-    expect(await fetch('/test.jpg?r=45')).to.eq('image/jpeg')
+    expect(await fetch('/test.jpg?rotation=45')).toBe('image/jpeg')
+    expect(await fetch('/test.jpg?r=45')).toBe('image/jpeg')
   })
 
   it('should return jpeg with rotation and background', async () => {
-    expect(await fetch('/test.jpg?rotation=45&background=white')).to.eq('image/jpeg')
-    expect(await fetch('/test.jpg?r=45&bg=white')).to.eq('image/jpeg')
+    expect(await fetch('/test.jpg?rotation=45&background=white')).toBe('image/jpeg')
+    expect(await fetch('/test.jpg?r=45&bg=white')).toBe('image/jpeg')
   })
 
   it('should return jpeg with different quality', async () => {
-    expect(await fetch('/test.jpg?quality=3')).to.eq('image/jpeg')
-    expect(await fetch('/test.jpg?q=3')).to.eq('image/jpeg')
+    expect(await fetch('/test.jpg?quality=3')).toBe('image/jpeg')
+    expect(await fetch('/test.jpg?q=3')).toBe('image/jpeg')
   })
 
   it('should return trimmed jpeg', async () => {
-    expect(await fetch('/product.jpeg?trim')).to.eq('image/jpeg')
-    expect(await fetch('/product.jpeg?t')).to.eq('image/jpeg')
+    expect(await fetch('/product.jpeg?trim')).toBe('image/jpeg')
+    expect(await fetch('/product.jpeg?t')).toBe('image/jpeg')
   })
 })
 
 describe('guard behaviour', () => {
   let server: FastifyInstance
 
-  before(async () => {
+  beforeAll(async () => {
     server = fastify()
 
     server.register(fastifyModernImages, { regex: /^[^?]+$/ })
@@ -150,24 +149,24 @@ describe('guard behaviour', () => {
     await server.listen({ port: 4567 })
   })
 
-  after(async () => {
+  afterAll(async () => {
     await sleep(10)
     await server.close()
   })
 
   it('should return avif', async () => {
-    expect(await fetch('/test.jpg?foo', 'image/avif,image/webp')).to.eq('image/jpeg')
+    expect(await fetch('/test.jpg?foo', 'image/avif,image/webp')).toBe('image/jpeg')
   })
 
   it('should return png', async () => {
-    expect(await fetch('/test.png?foo', 'image/avif,image/webp')).to.eq('image/png')
+    expect(await fetch('/test.png?foo', 'image/avif,image/webp')).toBe('image/png')
   })
 })
 
 describe('passthrough behaviour', () => {
   let server: FastifyInstance
 
-  before(async () => {
+  beforeAll(async () => {
     server = fastify()
 
     server.register(fastifyModernImages, {
@@ -186,12 +185,12 @@ describe('passthrough behaviour', () => {
     await server.listen({ port: 4567 })
   })
 
-  after(async () => {
+  afterAll(async () => {
     await sleep(10)
     await server.close()
   })
 
   it('should return jpeg', async () => {
-    expect(await fetch('/test.jpg', 'image/avif,image/webp')).to.eq('image/jpeg')
+    expect(await fetch('/test.jpg', 'image/avif,image/webp')).toBe('image/jpeg')
   })
 })
