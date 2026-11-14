@@ -1,369 +1,176 @@
-import type { FastifyInstance } from 'fastify'
-import type { Buffer } from 'node:buffer'
-import fs from 'node:fs/promises'
-import path from 'node:path'
-import fastifyStatic from '@fastify/static'
-import fastify from 'fastify'
-import sharp from 'sharp'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { Buffer } from 'node:buffer'
+import { Readable } from 'node:stream'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import fastifyModernImages from '../src/index'
+import * as utils from '../src/utils'
 
-import fastifyModernImages from '../src'
+const mockSharpInstance = {
+  trim: vi.fn().mockReturnThis(),
+  metadata: vi.fn(),
+  rotate: vi.fn().mockReturnThis(),
+  resize: vi.fn().mockReturnThis(),
+  flatten: vi.fn().mockReturnThis(),
+  toFormat: vi.fn(),
+}
 
-async function fetchImage(
-  server: FastifyInstance,
-  requestPath: string,
-  accept = '',
-): Promise<{ contentType: string, body: Buffer }> {
-  const res = await server.inject({
-    method: 'GET',
-    url: requestPath,
-    headers: {
-      accept,
-    },
-  })
-  const rawContentType = res.headers['content-type']
-  let contentType = ''
-  if (typeof rawContentType === 'string') {
-    contentType = rawContentType
+vi.mock('sharp', () => ({
+  default: vi.fn(() => mockSharpInstance),
+}))
+
+type OnSendHook = (request: any, reply: any, payload: unknown) => Promise<unknown>
+
+async function registerPlugin(opts = {}): Promise<OnSendHook> {
+  let hook: OnSendHook | undefined
+  const fakeFastify = {
+    addHook: vi.fn((_name: string, fn: OnSendHook) => {
+      hook = fn
+    }),
   }
-  return { contentType, body: res.rawPayload }
+  await fastifyModernImages(fakeFastify as any, opts)
+  return hook!
 }
 
-async function fetch(server: FastifyInstance, requestPath: string, accept = ''): Promise<string> {
-  const { contentType } = await fetchImage(server, requestPath, accept)
-  return contentType
+function createRequest(overrides: Record<string, unknown> = {}) {
+  return {
+    raw: { url: '/image.jpg' },
+    query: {},
+    headers: { accept: 'image/webp' },
+    log: {
+      info: vi.fn(),
+      warn: vi.fn(),
+    },
+    ...overrides,
+  }
 }
 
-async function createDefaultServer(): Promise<FastifyInstance> {
-  const server = fastify()
-
-  server.register(fastifyModernImages)
-  server.register(fastifyStatic, {
-    root: path.join(__dirname, '../example/public'),
-    prefix: '/',
-  })
-
-  server.get('/buffer.jpg', async (request, reply) => {
-    const buffer = await fs.readFile(path.join(__dirname, '../example/public/test.jpg'))
-    return reply.header('Content-Type', 'image/jpeg').send(buffer)
-  })
-
-  await server.ready()
-  return server
+function createReply(contentType = 'image/jpeg') {
+  const headers = new Map<string, unknown>([
+    ['content-type', contentType],
+  ])
+  return {
+    getHeader: vi.fn((key: string) => headers.get(key.toLowerCase())),
+    header: vi.fn((key: string, val: unknown) => {
+      headers.set(key.toLowerCase(), val)
+    }),
+    removeHeader: vi.fn((key: string) => {
+      headers.delete(key.toLowerCase())
+    }),
+  }
 }
 
-describe('default behaviour - formats', () => {
-  let server: FastifyInstance
-
-  beforeAll(async () => {
-    server = await createDefaultServer()
+describe('fastifyModernImages unit tests - passthrough and input', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSharpInstance.metadata.mockResolvedValue({ hasAlpha: false })
+    mockSharpInstance.toFormat.mockReturnValue({
+      toBuffer: vi.fn().mockResolvedValue(Buffer.from('encoded')),
+    })
   })
 
-  afterAll(async () => {
-    await server.close()
+  it('passes through when url does not match regex', async () => {
+    const onSend = await registerPlugin({ regex: /^\/images\// })
+    const payload = Buffer.from('raw')
+    const result = await onSend(createRequest({
+      raw: { url: '/other/a.jpg' },
+    }), createReply(), payload)
+    expect(result).toBe(payload)
   })
 
-  it('should return avif', async () => {
-    const { contentType, body } = await fetchImage(server, '/test.jpg', 'image/avif,image/webp')
-    expect(contentType).toBe('image/avif')
-    const meta = await sharp(body).metadata()
-    expect(meta.format).toBe('heif')
+  it('passes through when payload or content-type is invalid', async () => {
+    const onSend = await registerPlugin()
+    const result = await onSend(createRequest(), createReply('text/plain'), 'hello')
+    expect(result).toBe('hello')
   })
 
-  it('should return webp', async () => {
-    const { contentType, body } = await fetchImage(server, '/test.jpg', 'image/webp')
-    expect(contentType).toBe('image/webp')
-    const meta = await sharp(body).metadata()
-    expect(meta.format).toBe('webp')
+  it('reads stream payloads into a buffer', async () => {
+    const onSend = await registerPlugin()
+    const stream = Readable.from([
+      Buffer.from('chunk-1'),
+      Buffer.from('chunk-2'),
+    ])
+    const result = await onSend(createRequest(), createReply(), stream)
+    expect(result).toEqual(Buffer.from('encoded'))
   })
 
-  it('should return jpeg', async () => {
-    const { contentType, body } = await fetchImage(server, '/test.jpg')
-    expect(contentType).toBe('image/jpeg')
-    const meta = await sharp(body).metadata()
-    expect(meta.format).toBe('jpeg')
-  })
-
-  it('should return png', async () => {
-    const { contentType, body } = await fetchImage(server, '/test-alpha.png')
-    expect(contentType).toBe('image/png')
-    const meta = await sharp(body).metadata()
-    expect(meta.format).toBe('png')
-  })
-
-  it('should work with buffer', async () => {
-    const { contentType, body } = await fetchImage(server, '/buffer.jpg', 'image/avif,image/webp')
-    expect(contentType).toBe('image/avif')
-    const meta = await sharp(body).metadata()
-    expect(meta.format).toBe('heif')
-  })
-})
-
-describe('default behaviour - transformations', () => {
-  let server: FastifyInstance
-
-  beforeAll(async () => {
-    server = await createDefaultServer()
-  })
-
-  afterAll(async () => {
-    await server.close()
-  })
-
-  it('should return jpeg with transformation', async () => {
-    const w150 = await fetchImage(server, '/test.jpg?width=150')
-    expect(w150.contentType).toBe('image/jpeg')
-    expect((await sharp(w150.body).metadata()).width).toBe(150)
-
-    const h150 = await fetchImage(server, '/test.jpg?height=150')
-    expect(h150.contentType).toBe('image/jpeg')
-    expect((await sharp(h150.body).metadata()).height).toBe(150)
-
-    const contain = await fetchImage(server, '/test.jpg?width=150&height=150&fit=contain')
-    expect(contain.contentType).toBe('image/jpeg')
-    const containMeta = await sharp(contain.body).metadata()
-    expect(containMeta.width).toBe(150)
-    expect(containMeta.height).toBe(150)
-
-    const posLeft = await fetchImage(server, '/test.jpg?width=150&height=150&position=left')
-    expect(posLeft.contentType).toBe('image/jpeg')
-    const posLeftMeta = await sharp(posLeft.body).metadata()
-    expect(posLeftMeta.width).toBe(150)
-    expect(posLeftMeta.height).toBe(150)
-  })
-
-  it('should return jpeg with transformation and background', async () => {
-    const { contentType, body } = await fetchImage(server, '/test.jpg?width=800&height=200&fit=contain&background=white')
-    expect(contentType).toBe('image/jpeg')
-    const meta = await sharp(body).metadata()
-    expect(meta.width).toBe(800)
-    expect(meta.height).toBe(200)
-    const { data } = await sharp(body).raw().toBuffer({ resolveWithObject: true })
-    expect(data[0]).toBeGreaterThan(240)
-    expect(data[1]).toBeGreaterThan(240)
-    expect(data[2]).toBeGreaterThan(240)
-  })
-
-  it('should return jpeg with rotation', async () => {
-    const original = await fetchImage(server, '/test.jpg')
-    const originalMeta = await sharp(original.body).metadata()
-
-    for (const query of ['rotation=45', 'r=45']) {
-      const { contentType, body } = await fetchImage(server, `/test.jpg?${query}`)
-      expect(contentType).toBe('image/jpeg')
-      const meta = await sharp(body).metadata()
-      expect(meta.width).not.toBe(originalMeta.width)
-      expect(meta.height).not.toBe(originalMeta.height)
-    }
-  })
-
-  it('should return jpeg with rotation and background', async () => {
-    const original = await fetchImage(server, '/test.jpg')
-    const originalMeta = await sharp(original.body).metadata()
-
-    for (const query of ['rotation=45&background=white', 'r=45&b=white']) {
-      const { contentType, body } = await fetchImage(server, `/test.jpg?${query}`)
-      expect(contentType).toBe('image/jpeg')
-      const meta = await sharp(body).metadata()
-      expect(meta.width).not.toBe(originalMeta.width)
-      const { data } = await sharp(body).raw().toBuffer({ resolveWithObject: true })
-      expect(data[0]).toBeGreaterThan(240)
-      expect(data[1]).toBeGreaterThan(240)
-      expect(data[2]).toBeGreaterThan(240)
-    }
-  })
-
-  it('should return jpeg with different quality', async () => {
-    const original = await fetchImage(server, '/test.jpg')
-
-    for (const query of ['quality=3', 'q=3']) {
-      const { contentType, body } = await fetchImage(server, `/test.jpg?${query}`)
-      expect(contentType).toBe('image/jpeg')
-      expect(body.length).toBeLessThan(original.body.length)
-    }
-  })
-
-  it('should return trimmed jpeg', async () => {
-    const original = await fetchImage(server, '/product.jpeg')
-    const originalMeta = await sharp(original.body).metadata()
-
-    for (const query of ['trim', 't']) {
-      const { contentType, body } = await fetchImage(server, `/product.jpeg?${query}`)
-      expect(contentType).toBe('image/jpeg')
-      const meta = await sharp(body).metadata()
-      expect(meta.width).toBeLessThan(originalMeta.width!)
-      expect(meta.height).toBeLessThan(originalMeta.height!)
-    }
-  })
-})
-
-describe('guard behaviour', () => {
-  let server: FastifyInstance
-
-  beforeAll(async () => {
-    server = fastify()
-
-    server.register(fastifyModernImages, { regex: /^[^?]+$/ })
-    server.register(fastifyStatic, {
-      root: path.join(__dirname, '../example/public'),
-      prefix: '/',
+  it('calls removeBackground with default and custom model when ai/a query is set', async () => {
+    const spy = vi.spyOn(utils, 'removeBackground').mockResolvedValue(Buffer.from('no-bg'))
+    const onSend = await registerPlugin({
+      rembg: { model: 'u2net' },
     })
 
-    await server.ready()
-  })
+    await onSend(createRequest({
+      query: { ai: '' },
+    }), createReply(), Buffer.from('raw'))
+    expect(spy).toHaveBeenCalledWith(Buffer.from('raw'), 'u2net')
 
-  afterAll(async () => {
-    await server.close()
-  })
-
-  it('should return avif', async () => {
-    expect(await fetch(server, '/test.jpg?foo', 'image/avif,image/webp')).toBe('image/jpeg')
-  })
-
-  it('should return png', async () => {
-    expect(await fetch(server, '/test.png?foo', 'image/avif,image/webp')).toBe('image/png')
+    await onSend(createRequest({
+      query: { a: 'isnet' },
+    }), createReply(), Buffer.from('raw'))
+    expect(spy).toHaveBeenCalledWith(Buffer.from('raw'), 'isnet')
+    spy.mockRestore()
   })
 })
 
-describe('passthrough behaviour', () => {
-  let server: FastifyInstance
+describe('fastifyModernImages unit tests - transforms and encoding', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSharpInstance.metadata.mockResolvedValue({ hasAlpha: false })
+    mockSharpInstance.toFormat.mockReturnValue({
+      toBuffer: vi.fn().mockResolvedValue(Buffer.from('encoded')),
+    })
+  })
 
-  beforeAll(async () => {
-    server = fastify()
+  it('applies trim, rotate, resize, flatten, and sets response headers', async () => {
+    const onSend = await registerPlugin()
+    const req = createRequest({
+      query: {
+        t: '',
+        width: '100',
+        height: '200',
+        fit: 'contain',
+        position: 'top',
+        background: 'red',
+        rotation: '90',
+        q: '9',
+      },
+    })
+    const reply = createReply('image/jpeg')
 
-    server.register(fastifyModernImages, {
+    const result = await onSend(req, reply, Buffer.from('0123456789abcdef'))
+    expect(result).toEqual(Buffer.from('encoded'))
+    expect(mockSharpInstance.trim).toHaveBeenCalledTimes(1)
+    expect(mockSharpInstance.rotate).toHaveBeenCalledWith(90, { background: 'red' })
+    expect(mockSharpInstance.resize).toHaveBeenCalledWith(100, 200, { fit: 'contain', position: 'top', background: 'red' })
+    expect(mockSharpInstance.flatten).toHaveBeenCalledWith({ background: 'red' })
+    expect(mockSharpInstance.toFormat).toHaveBeenCalledWith('webp', { quality: 93 })
+    expect(reply.header).toHaveBeenCalledWith('Content-Type', 'image/webp')
+    expect(reply.header).toHaveBeenCalledWith('Content-Length', 7)
+    expect(reply.header).toHaveBeenCalledWith('Vary', 'Accept')
+    expect(reply.removeHeader).toHaveBeenCalledWith('etag')
+    expect(req.log.info).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips resize and flatten when dimensions and background are absent', async () => {
+    const onSend = await registerPlugin()
+    await onSend(createRequest(), createReply(), Buffer.from('raw'))
+    expect(mockSharpInstance.rotate).toHaveBeenCalledWith(undefined, { background: undefined })
+    expect(mockSharpInstance.resize).not.toHaveBeenCalled()
+    expect(mockSharpInstance.flatten).not.toHaveBeenCalled()
+  })
+
+  it('logs warning and returns buffer when no adequate format is found', async () => {
+    const onSend = await registerPlugin({
       compression: {
         jpeg: { enabled: false, format: 'jpeg' },
-        webp: { enabled: false, format: 'webp' },
         avif: { enabled: false, format: 'avif' },
+        webp: { enabled: false, format: 'webp' },
         png: { enabled: false, format: 'png' },
       },
     })
-    server.register(fastifyStatic, {
-      root: path.join(__dirname, '../example/public'),
-      prefix: '/',
-    })
-
-    await server.ready()
-  })
-
-  afterAll(async () => {
-    await server.close()
-  })
-
-  it('should return jpeg', async () => {
-    expect(await fetch(server, '/test.jpg', 'image/avif,image/webp')).toBe('image/jpeg')
-  })
-})
-
-describe('immutability of defaults and format.options', () => {
-  it('should not mutate defaults across plugin registrations', async () => {
-    const server1 = fastify()
-    server1.register(fastifyModernImages, {
-      compression: {
-        avif: { enabled: false, format: 'avif' },
-      },
-    })
-    server1.register(fastifyStatic, {
-      root: path.join(__dirname, '../example/public'),
-      prefix: '/',
-    })
-
-    const server2 = fastify()
-    server2.register(fastifyModernImages)
-    server2.register(fastifyStatic, {
-      root: path.join(__dirname, '../example/public'),
-      prefix: '/',
-    })
-
-    const res1 = await server1.inject({
-      method: 'GET',
-      url: '/test.jpg',
-      headers: { accept: 'image/avif,image/webp' },
-    })
-    expect(res1.headers['content-type']).toBe('image/webp')
-
-    const res2 = await server2.inject({
-      method: 'GET',
-      url: '/test.jpg',
-      headers: { accept: 'image/avif,image/webp' },
-    })
-    expect(res2.headers['content-type']).toBe('image/avif')
-
-    await server1.close()
-    await server2.close()
-  })
-})
-
-describe('vary header', () => {
-  it('sets Vary: Accept when processing an image', async () => {
-    const server = fastify()
-    server.register(fastifyModernImages)
-    server.register(fastifyStatic, {
-      root: path.join(__dirname, '../example/public'),
-      prefix: '/',
-    })
-
-    const res = await server.inject({
-      method: 'GET',
-      url: '/test.jpg',
-      headers: { accept: 'image/webp' },
-    })
-
-    expect(res.statusCode).toBe(200)
-    expect(res.headers['content-type']).toBe('image/webp')
-    expect(res.headers.vary).toBe('Accept')
-
-    await server.close()
-  })
-
-  it('preserves existing Vary header values without duplicating Accept', async () => {
-    const server = fastify()
-    server.register(fastifyModernImages)
-    server.register(fastifyStatic, {
-      root: path.join(__dirname, '../example/public'),
-      prefix: '/',
-    })
-
-    server.get('/with-origin.jpg', (_request, reply) => {
-      reply.header('Vary', 'Origin')
-      return reply.sendFile('test.jpg')
-    })
-    server.get('/with-accept.jpg', (_request, reply) => {
-      reply.header('Vary', 'Origin, accept')
-      return reply.sendFile('test.jpg')
-    })
-
-    const resOrigin = await server.inject({
-      method: 'GET',
-      url: '/with-origin.jpg',
-      headers: { accept: 'image/webp' },
-    })
-    expect(resOrigin.headers.vary).toBe('Origin, Accept')
-
-    const resAccept = await server.inject({
-      method: 'GET',
-      url: '/with-accept.jpg',
-      headers: { accept: 'image/webp' },
-    })
-    expect(resAccept.headers.vary).toBe('Origin, accept')
-
-    await server.close()
-  })
-
-  it('does not set Vary: Accept on passthrough responses', async () => {
-    const server = fastify()
-    server.register(fastifyModernImages)
-    server.get('/text', (_request, reply) => reply.type('text/plain').send('ok'))
-
-    const res = await server.inject({
-      method: 'GET',
-      url: '/text',
-    })
-
-    expect(res.statusCode).toBe(200)
-    expect(res.headers.vary).toBeUndefined()
-
-    await server.close()
+    const req = createRequest()
+    const buf = Buffer.from('raw')
+    const result = await onSend(req, createReply('image/jpeg'), buf)
+    expect(result).toBe(buf)
+    expect(req.log.warn).toHaveBeenCalledWith('No adequate format for image of type "image/jpeg" was found.')
   })
 })

@@ -28,7 +28,8 @@
     "dev": "tsc-watch --onSuccess \"node example/server.js\"",
     "build": "tsc",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run test/ --coverage",
+    "test:e2e": "vitest run e2e/",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "commitlint": "commitlint"
