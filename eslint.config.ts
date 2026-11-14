@@ -28,6 +28,17 @@ export default antfu(
   },
   {
     files: [
+      '**/*.md/**',
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: null,
+        projectService: false,
+      },
+    },
+  },
+  {
+    files: [
       '**/*.test.ts',
     ],
     rules: {
