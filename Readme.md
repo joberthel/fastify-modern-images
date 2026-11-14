@@ -24,18 +24,21 @@ npm i fastify-modern-images
 ## Usage
 
 ```js
-const path = require('path');
-const fastify = require('fastify')({ logger: { level: 'trace' } });
+const path = require('node:path')
+const fastify = require('fastify')({
+  logger: { level: 'trace' }
+})
 
 fastify
-    .register(require('@fastify/static'), {
-        root: path.join(__dirname, 'public'),
-        prefix: '/'
-    })
-    .register(require('fastify-modern-images'), { quality: 7 })
-    .listen({ port: 3000 }, err => {
-        if (err) throw err;
-    });
+  .register(require('@fastify/static'), {
+    root: path.join(__dirname, 'public'),
+    prefix: '/'
+  })
+  .register(require('fastify-modern-images'), { quality: 7 })
+  .listen({ port: 3000 }, (err) => {
+    if (err)
+      throw err
+  })
 ```
 
 ## Options
@@ -105,7 +108,7 @@ http://localhost:3000/test.jpg?quality=9
 http://localhost:3000/test.jpg?q=2
 ```
 
-# AI Background Removal
+## AI Background Removal
 
 Make sure python and [rembg](https://github.com/danielgatis/rembg) is installed.
 
