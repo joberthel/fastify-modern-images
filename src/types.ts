@@ -1,3 +1,5 @@
+import type sharp from 'sharp'
+
 export interface MinifyQuerystring {
   quality?: '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
   width?: string
@@ -52,7 +54,7 @@ export interface CompressionConfig {
   priority: number
   alpha: boolean
   quality: Record<string, number>
-  options: Record<string, any>
+  options: sharp.AvifOptions | sharp.WebpOptions | sharp.JpegOptions | sharp.PngOptions
   contentType: string
   supported: (accept: string) => boolean
 }
