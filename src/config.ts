@@ -2,10 +2,13 @@ import type { FastifyModernImagesOptions, ResolvedFastifyModernImagesOptions } f
 import { isMediaTypeAccepted } from './negotiation'
 import { MAX_DIMENSION } from './validation'
 
+export const DEFAULT_MAX_INPUT_BYTES = 50 * 1024 * 1024
+
 export const defaults: ResolvedFastifyModernImagesOptions = {
   regex: /.*/,
   quality: '7',
   maxDimension: MAX_DIMENSION,
+  maxInputBytes: DEFAULT_MAX_INPUT_BYTES,
   withoutEnlargement: true,
   rembg: {
     enabled: false,

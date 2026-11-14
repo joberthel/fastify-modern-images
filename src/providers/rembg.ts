@@ -1,9 +1,12 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
-import { buffer } from 'node:stream/consumers'
+import { Readable } from 'node:stream'
+import { DEFAULT_MAX_INPUT_BYTES } from '../config'
+import { readStreamCapped, readStreamWithLimit } from '../stream'
 
 const SAFE_REMBG_MODEL_REGEX = /^[a-z0-9][\w-]*$/i
+const MAX_STDERR_BYTES = 64 * 1024
 
 export interface RemoveBackgroundOptions {
   allowedModels?: string[]
@@ -11,12 +14,14 @@ export interface RemoveBackgroundOptions {
   concurrency?: number
   endpoint?: string
   signal?: AbortSignal
+  maxOutputBytes?: number
 }
 
 interface EndpointCallOptions {
   endpoint: string
   timeoutMs?: number
   signal?: AbortSignal
+  maxOutputBytes: number
 }
 
 function formatExitError(code: number | null, signal: NodeJS.Signals | null, stderrBuffer: Buffer): Error {
@@ -97,7 +102,27 @@ async function removeBackgroundViaEndpoint(
     throw new Error(`rembg endpoint responded with ${response.status} ${response.statusText}`)
   }
 
-  return Buffer.from(await response.arrayBuffer())
+  const contentLength = response.headers?.get('content-length') ?? null
+  if (contentLength !== null) {
+    const parsedLength = Number(contentLength)
+    if (Number.isFinite(parsedLength) && parsedLength > options.maxOutputBytes) {
+      await response.body?.cancel()
+      throw new Error(`rembg endpoint response exceeded maximum allowed size of ${options.maxOutputBytes} bytes`)
+    }
+  }
+
+  if (response.body) {
+    return readStreamWithLimit(
+      Readable.fromWeb(response.body),
+      options.maxOutputBytes,
+    )
+  }
+
+  const buf = Buffer.from(await response.arrayBuffer())
+  if (buf.length > options.maxOutputBytes) {
+    throw new Error(`rembg endpoint response exceeded maximum allowed size of ${options.maxOutputBytes} bytes`)
+  }
+  return buf
 }
 
 function setupAbortAndTimeout(
@@ -139,6 +164,7 @@ function setupAbortAndTimeout(
 async function removeBackgroundViaSpawn(
   input: Buffer,
   model: string,
+  maxOutputBytes: number,
   timeoutMs?: number,
   signal?: AbortSignal,
 ): Promise<Buffer> {
@@ -164,8 +190,14 @@ async function removeBackgroundViaSpawn(
 
     cleanup = setupAbortAndTimeout(child, fail, timeoutMs, signal)
 
-    const stdoutPromise = buffer(child.stdout)
-    const stderrPromise = buffer(child.stderr).catch(() => Buffer.alloc(0))
+    const stdoutPromise = readStreamWithLimit(child.stdout, maxOutputBytes)
+    stdoutPromise.catch((err: unknown) => {
+      child.kill()
+      fail(err instanceof Error
+        ? err
+        : new Error(String(err)))
+    })
+    const stderrPromise = readStreamCapped(child.stderr, MAX_STDERR_BYTES).catch(() => Buffer.alloc(0))
 
     child.on('error', fail)
     child.stdin.on('error', (err: NodeJS.ErrnoException) => {
@@ -206,6 +238,7 @@ export async function removeBackground(
   options?: RemoveBackgroundOptions,
 ): Promise<Buffer> {
   validateRembgModel(model, options?.allowedModels)
+  const maxOutputBytes = options?.maxOutputBytes ?? DEFAULT_MAX_INPUT_BYTES
 
   return withConcurrencyLimit(options?.concurrency, async () => {
     if (options?.endpoint !== undefined && options.endpoint !== '') {
@@ -213,8 +246,9 @@ export async function removeBackground(
         endpoint: options.endpoint,
         timeoutMs: options.timeoutMs,
         signal: options.signal,
+        maxOutputBytes,
       })
     }
-    return removeBackgroundViaSpawn(input, model, options?.timeoutMs, options?.signal)
+    return removeBackgroundViaSpawn(input, model, maxOutputBytes, options?.timeoutMs, options?.signal)
   })
 }

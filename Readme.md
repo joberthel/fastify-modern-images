@@ -48,6 +48,7 @@ fastify
     regex: /.*/, // If it is set will check this regex against request.raw.url (path + query string). Will only apply plugin if it is true.
     quality: '7', // Sets the default quality from '1' (worst), '2', ... '9' (best).
     maxDimension: 4096, // Maximum allowed width/height in pixels for resize query parameters.
+    maxInputBytes: 50 * 1024 * 1024, // Maximum allowed input/output byte size when buffering streams or payloads.
     withoutEnlargement: true, // Do not enlarge if the width or height are already less than the specified dimensions.
     sharpInputOptions: {}, // Options passed to the sharp(buffer, options) constructor (e.g. limitInputPixels, failOn, sequentialRead).
     rembg: {

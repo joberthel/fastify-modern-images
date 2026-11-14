@@ -1,10 +1,10 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import type { Buffer } from 'node:buffer'
 import type { CompressionConfig, MinifyQuerystring, MinifyRequest, RembgOptions, ResolvedFastifyModernImagesOptions } from './types'
-import { buffer as streamToBuffer } from 'node:stream/consumers'
+import { Buffer } from 'node:buffer'
 import sharp from 'sharp'
 import { appendVaryHeader, computeDerivedEtag, getBestFormat, isStream, matchesIfNoneMatch } from './negotiation'
 import { removeBackground } from './providers/rembg'
+import { readStreamWithLimit } from './stream'
 import { isNonEmpty, parseBackground, parseDimension, parseFit, parsePosition, parseQuality, parseRotation, parseTrim } from './validation'
 
 export const processedReplies = new WeakSet<FastifyReply>()
@@ -52,10 +52,18 @@ async function resolveInputBuffer(
   payload: unknown,
   query: MinifyQuerystring,
   rembg: RembgOptions,
+  maxInputBytes: number,
 ): Promise<{ buffer: Buffer, inputLength: number }> {
-  const inputBuffer = isStream(payload)
-    ? await streamToBuffer(payload as unknown as NodeJS.ReadableStream)
-    : payload as Buffer
+  let inputBuffer: Buffer
+  if (isStream(payload)) {
+    inputBuffer = await readStreamWithLimit(payload as unknown as NodeJS.ReadableStream, maxInputBytes)
+  }
+  else {
+    inputBuffer = payload as Buffer
+    if (Buffer.isBuffer(inputBuffer) && inputBuffer.length > maxInputBytes) {
+      throw new Error(`Input buffer exceeded maximum allowed size of ${maxInputBytes} bytes`)
+    }
+  }
   const inputLength = inputBuffer.length
 
   const ai = query.ai ?? query.a
@@ -71,6 +79,7 @@ async function resolveInputBuffer(
     timeoutMs: rembg.timeoutMs,
     concurrency: rembg.concurrency,
     endpoint: rembg.endpoint,
+    maxOutputBytes: maxInputBytes,
   })
   return { buffer, inputLength }
 }
@@ -166,7 +175,7 @@ export async function processPayload(
     return payload
   }
 
-  const { buffer, inputLength } = await resolveInputBuffer(payload, request.query, options.rembg)
+  const { buffer, inputLength } = await resolveInputBuffer(payload, request.query, options.rembg, options.maxInputBytes)
   const instance = sharp(buffer, options.sharpInputOptions)
 
   if (parseTrim(request.query.trim ?? request.query.t)) {

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify'
+import { Buffer } from 'node:buffer'
 import path from 'node:path'
 import fastifyStatic from '@fastify/static'
 import fastify from 'fastify'
@@ -111,6 +112,45 @@ describe('plugin options', () => {
       })
 
       expect(res.statusCode).toBe(500)
+    }
+    finally {
+      await limitedServer.close()
+    }
+  })
+
+  it('enforces maxInputBytes for stream and buffer payloads', async () => {
+    const limitedServer = fastify()
+    limitedServer.register(fastifyModernImages, {
+      maxInputBytes: 100,
+    })
+    limitedServer.register(fastifyStatic, {
+      root: path.join(__dirname, '../example/public'),
+      prefix: '/',
+    })
+    limitedServer.get('/buffer.jpg', async (_req, reply) => {
+      reply.type('image/jpeg')
+      return Buffer.alloc(101)
+    })
+    await limitedServer.ready()
+
+    try {
+      const streamRes = await limitedServer.inject({
+        method: 'GET',
+        url: '/test.jpg',
+        headers: {
+          accept: 'image/webp',
+        },
+      })
+      expect(streamRes.statusCode).toBe(500)
+
+      const bufferRes = await limitedServer.inject({
+        method: 'GET',
+        url: '/buffer.jpg',
+        headers: {
+          accept: 'image/webp',
+        },
+      })
+      expect(bufferRes.statusCode).toBe(500)
     }
     finally {
       await limitedServer.close()

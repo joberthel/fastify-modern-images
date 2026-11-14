@@ -72,6 +72,7 @@ export interface ResolvedFastifyModernImagesOptions {
   regex: RegExp
   quality: string | number
   maxDimension: number
+  maxInputBytes: number
   withoutEnlargement: boolean
   rembg: RembgOptions
   compression: Record<string, CompressionConfig>
@@ -84,6 +85,7 @@ export interface FastifyModernImagesOptions {
   regex?: RegExp
   quality?: string | number
   maxDimension?: number
+  maxInputBytes?: number
   withoutEnlargement?: boolean
   rembg?: Partial<RembgOptions>
   compression?: Record<string, FastifyModernImagesOptionsCompression>
