@@ -101,6 +101,8 @@ http://localhost:3000/test.jpg?t
 
 Have a look at the [sharp documentation](https://sharp.pixelplumbing.com/api-resize#resize) for all available options.
 
+When no explicit `rotation` / `r` parameter is specified, images are automatically oriented based on their EXIF orientation tag before EXIF metadata is stripped on output.
+
 You can also set the quality via a query parameter:
 
 ```

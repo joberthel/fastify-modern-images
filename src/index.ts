@@ -118,6 +118,8 @@ function applySharpTransforms(instance: sharp.Sharp, query: MinifyQuerystring): 
   const background = parseBackground(query.background ?? query.b)
   const rotation = parseRotation(query.rotation ?? query.r)
 
+  // Called unconditionally so sharp auto-orients images from their EXIF orientation tag
+  // when rotation is undefined, before EXIF metadata is stripped on output.
   instance.rotate(rotation, { background })
   applyResize(instance, query, background)
 
