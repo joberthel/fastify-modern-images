@@ -5,12 +5,14 @@ import fp from 'fastify-plugin'
 import { resolveOptions } from './config'
 import { validatePayload } from './negotiation'
 import { processedReplies, processPayload } from './pipeline'
+import { createConcurrencyLimiter } from './providers/rembg'
 import { matchesUrlPattern } from './validation'
 
 async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModernImagesOptions) {
   const options = resolveOptions(opts)
   const contentTypes = Object.values(options.compression).map(item => item.contentType)
   const inFlight = new Map<string, Promise<Buffer>>()
+  const rembgLimiter = createConcurrencyLimiter(options.rembg.concurrency)
 
   fastify.addHook('onSend', async (request: FastifyRequest<ImageTransformRequest>, reply, payload) => {
     if (
@@ -27,7 +29,7 @@ async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModern
       return payload
     }
 
-    return processPayload(request, reply, payload, options, inFlight)
+    return processPayload(request, reply, payload, options, inFlight, rembgLimiter)
   })
 }
 

@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
+import type { ConcurrencyLimiter } from './providers/rembg'
 import type { CompressionConfig, ImageTransformQuerystring, ImageTransformRequest, RembgOptions, ResolvedFastifyModernImagesOptions } from './types'
 import type { NormalizedTransformParams } from './validation'
 import { Buffer } from 'node:buffer'
@@ -47,6 +48,7 @@ async function resolveInputBuffer(
   query: ImageTransformQuerystring,
   rembg: RembgOptions,
   maxInputBytes: number,
+  rembgLimiter?: ConcurrencyLimiter,
 ): Promise<{ buffer: Buffer, inputLength: number }> {
   let inputBuffer: Buffer
   if (isStream(payload)) {
@@ -72,6 +74,7 @@ async function resolveInputBuffer(
     allowedModels: rembg.allowedModels,
     timeoutMs: rembg.timeoutMs,
     concurrency: rembg.concurrency,
+    limiter: rembgLimiter,
     endpoint: rembg.endpoint,
     maxOutputBytes: maxInputBytes,
   })
@@ -162,6 +165,7 @@ export async function processPayload(
   payload: unknown,
   options: ResolvedFastifyModernImagesOptions,
   inFlight?: Map<string, Promise<Buffer>>,
+  rembgLimiter?: ConcurrencyLimiter,
 ): Promise<unknown> {
   const compressionList: CompressionConfig[] = Object.values(options.compression)
   const accept = request.headers.accept ?? ''
@@ -171,7 +175,7 @@ export async function processPayload(
     return payload
   }
 
-  const { buffer, inputLength } = await resolveInputBuffer(payload, request.query, options.rembg, options.maxInputBytes)
+  const { buffer, inputLength } = await resolveInputBuffer(payload, request.query, options.rembg, options.maxInputBytes, rembgLimiter)
 
   try {
     const instance = sharp(buffer, options.sharpInputOptions)

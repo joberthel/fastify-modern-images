@@ -6,6 +6,7 @@ import { PassThrough, Stream } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import { resolveOptions } from '../src/config'
 import { computeDerivedEtag, matchesIfNoneMatch } from '../src/negotiation'
+import { createConcurrencyLimiter } from '../src/providers/rembg'
 import { appendVaryHeader, deepMerge, getBestFormat, guard, isMediaTypeAccepted, isStream, matchesUrlPattern, removeBackground, validatePayload } from '../src/utils'
 
 vi.mock('node:child_process', () => ({
@@ -359,6 +360,48 @@ describe('utils - removeBackground (validation, timeout, concurrency, endpoint)'
     child2.stderr.end()
     child2.emit('close', 0, null)
     await expect(p2).resolves.toEqual(Buffer.from('out2'))
+  })
+
+  it('keeps independent concurrency limiters isolated from each other', async () => {
+    const limiterA = createConcurrencyLimiter(1)
+    const limiterB = createConcurrencyLimiter(1)
+
+    const childA1 = createMockChildProcess()
+    const childA2 = createMockChildProcess()
+    const childB1 = createMockChildProcess()
+    vi.mocked(spawn)
+      .mockReturnValueOnce(childA1 as never)
+      .mockReturnValueOnce(childB1 as never)
+      .mockReturnValueOnce(childA2 as never)
+
+    const spawnCallsBefore = vi.mocked(spawn).mock.calls.length
+    const pA1 = removeBackground(Buffer.from('imgA1'), 'u2net', { limiter: limiterA })
+    const pA2 = removeBackground(Buffer.from('imgA2'), 'u2net', { limiter: limiterA })
+    const pB1 = removeBackground(Buffer.from('imgB1'), 'u2net', { limiter: limiterB })
+
+    // limiterA allows 1, limiterB allows 1 independently -> 2 spawns immediately
+    expect(vi.mocked(spawn).mock.calls.length - spawnCallsBefore).toBe(2)
+
+    // Completing limiterB does not wake limiterA's queued task
+    childB1.stdout.end('outB1')
+    childB1.stderr.end()
+    childB1.emit('close', 0, null)
+    await expect(pB1).resolves.toEqual(Buffer.from('outB1'))
+    await Promise.resolve()
+    expect(vi.mocked(spawn).mock.calls.length - spawnCallsBefore).toBe(2)
+
+    // Completing limiterA's active task wakes limiterA's queued task
+    childA1.stdout.end('outA1')
+    childA1.stderr.end()
+    childA1.emit('close', 0, null)
+    await expect(pA1).resolves.toEqual(Buffer.from('outA1'))
+    await Promise.resolve()
+    expect(vi.mocked(spawn).mock.calls.length - spawnCallsBefore).toBe(3)
+
+    childA2.stdout.end('outA2')
+    childA2.stderr.end()
+    childA2.emit('close', 0, null)
+    await expect(pA2).resolves.toEqual(Buffer.from('outA2'))
   })
 
   it('uses HTTP endpoint when configured and handles errors', async () => {

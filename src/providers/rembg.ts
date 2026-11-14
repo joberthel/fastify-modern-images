@@ -8,10 +8,13 @@ import { readStreamCapped, readStreamWithLimit } from '../stream'
 const SAFE_REMBG_MODEL_REGEX = /^[a-z0-9][\w-]*$/i
 const MAX_STDERR_BYTES = 64 * 1024
 
+export type ConcurrencyLimiter = <T>(fn: () => Promise<T>) => Promise<T>
+
 export interface RemoveBackgroundOptions {
   allowedModels?: string[]
   timeoutMs?: number
   concurrency?: number
+  limiter?: ConcurrencyLimiter
   endpoint?: string
   signal?: AbortSignal
   maxOutputBytes?: number
@@ -44,29 +47,45 @@ export function validateRembgModel(model: string, allowedModels?: string[]): voi
   }
 }
 
-let activeRembgCount = 0
-const rembgWaitQueue: Array<() => void> = []
-
-async function withConcurrencyLimit<T>(limit: number | undefined, fn: () => Promise<T>): Promise<T> {
+export function createConcurrencyLimiter(limit?: number): ConcurrencyLimiter {
   if (limit === undefined || limit <= 0 || !Number.isFinite(limit)) {
-    return fn()
+    return async fn => fn()
   }
 
-  if (activeRembgCount >= limit) {
-    await new Promise<void>(resolve => rembgWaitQueue.push(resolve))
-  }
+  let activeCount = 0
+  const waitQueue: Array<() => void> = []
 
-  activeRembgCount++
-  try {
-    return await fn()
-  }
-  finally {
-    activeRembgCount--
-    const next = rembgWaitQueue.shift()
-    if (next) {
-      next()
+  return async function withLimit<T>(fn: () => Promise<T>): Promise<T> {
+    if (activeCount >= limit) {
+      await new Promise<void>(resolve => waitQueue.push(resolve))
+    }
+
+    activeCount++
+    try {
+      return await fn()
+    }
+    finally {
+      activeCount--
+      const next = waitQueue.shift()
+      if (next) {
+        next()
+      }
     }
   }
+}
+
+const defaultLimiters = new Map<number, ConcurrencyLimiter>()
+
+function getDefaultLimiter(limit: number | undefined): ConcurrencyLimiter {
+  if (limit === undefined || limit <= 0 || !Number.isFinite(limit)) {
+    return async fn => fn()
+  }
+  let limiter = defaultLimiters.get(limit)
+  if (!limiter) {
+    limiter = createConcurrencyLimiter(limit)
+    defaultLimiters.set(limit, limiter)
+  }
+  return limiter
 }
 
 async function removeBackgroundViaEndpoint(
@@ -240,7 +259,9 @@ export async function removeBackground(
   validateRembgModel(model, options?.allowedModels)
   const maxOutputBytes = options?.maxOutputBytes ?? DEFAULT_MAX_INPUT_BYTES
 
-  return withConcurrencyLimit(options?.concurrency, async () => {
+  const runWithLimit = options?.limiter ?? getDefaultLimiter(options?.concurrency)
+
+  return runWithLimit(async () => {
     if (options?.endpoint !== undefined && options.endpoint !== '') {
       return removeBackgroundViaEndpoint(input, model, {
         endpoint: options.endpoint,
