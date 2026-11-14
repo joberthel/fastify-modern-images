@@ -5,7 +5,7 @@ import { buffer as streamToBuffer } from 'node:stream/consumers'
 import fp from 'fastify-plugin'
 import sharp from 'sharp'
 import { appendVaryHeader, deepMerge, getBestFormat, guard, isMediaTypeAccepted, isStream, removeBackground, validatePayload } from './utils'
-import { isNonEmpty, parseBackground, parseDimension, parseFit, parsePosition, parseRotation } from './validation'
+import { isNonEmpty, parseBackground, parseDimension, parseFit, parsePosition, parseQuality, parseRotation } from './validation'
 
 const defaults: ResolvedFastifyModernImagesOptions = {
   regex: /.*/,
@@ -169,8 +169,7 @@ async function encodeAndReply(
   context: EncodeContext,
 ): Promise<Buffer> {
   const { format, options, inputLength } = context
-  const uQuality = request.query.quality ?? request.query.q ?? options.quality
-  const quality = format.quality[String(uQuality)]
+  const quality = parseQuality(request.query.quality ?? request.query.q, format.quality, options.quality)
   const output = await instance.toFormat(format.format, { ...format.options, quality }).toBuffer()
 
   const inputType = String(reply.getHeader('Content-Type') ?? '')

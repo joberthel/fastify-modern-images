@@ -47,6 +47,11 @@ describe('query parameter validation integration', () => {
       '?f=contain&f=cover',
       '?p=top&p=bottom',
       '?ai=u2net&ai=isnet',
+      '?q=invalid',
+      '?q=99',
+      '?quality=toString',
+      '?q=constructor',
+      '?q=5&q=9',
     ]
 
     for (const qs of invalidQueries) {

@@ -121,3 +121,18 @@ export function parseBackground(value?: string): string | undefined {
   }
   return undefined
 }
+
+export function parseQuality(
+  value: unknown,
+  qualityMap: Record<string, number>,
+  fallback: string | number,
+): number | undefined {
+  if (isNonEmpty(value) && Object.hasOwn(qualityMap, value)) {
+    return qualityMap[value]
+  }
+  const fallbackKey = String(fallback)
+  if (Object.hasOwn(qualityMap, fallbackKey)) {
+    return qualityMap[fallbackKey]
+  }
+  return undefined
+}

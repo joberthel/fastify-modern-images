@@ -6,6 +6,7 @@ import {
   parseDimension,
   parseFit,
   parsePosition,
+  parseQuality,
   parseRotation,
 } from '../src/validation'
 
@@ -102,6 +103,27 @@ describe('validation helpers', () => {
     })
   })
 
+  describe('parseQuality', () => {
+    const qualityMap = { 9: 95, 7: 85, 1: 40 }
+
+    it('returns mapped quality for valid keys', () => {
+      expect(parseQuality('9', qualityMap, '7')).toBe(95)
+      expect(parseQuality('1', qualityMap, '7')).toBe(40)
+    })
+
+    it('falls back to default quality for invalid, empty, non-string, or prototype keys', () => {
+      expect(parseQuality(undefined, qualityMap, '7')).toBe(85)
+      expect(parseQuality('', qualityMap, '7')).toBe(85)
+      expect(parseQuality('invalid', qualityMap, '7')).toBe(85)
+      expect(parseQuality('99', qualityMap, '7')).toBe(85)
+      expect(parseQuality('toString', qualityMap, '7')).toBe(85)
+      expect(parseQuality('constructor', qualityMap, '7')).toBe(85)
+      expect(parseQuality('__proto__', qualityMap, '7')).toBe(85)
+      expect(parseQuality(['9', '1'], qualityMap, '7')).toBe(85)
+      expect(parseQuality('invalid', qualityMap, 'missing')).toBeUndefined()
+    })
+  })
+
   describe('querystring array pollution', () => {
     it('safely rejects array values in all parsers', () => {
       const polluted = ['red', 'blue'] as unknown as string
@@ -110,6 +132,7 @@ describe('validation helpers', () => {
       expect(parseFit(polluted)).toBe('cover')
       expect(parsePosition(polluted)).toBe('centre')
       expect(parseBackground(polluted)).toBeUndefined()
+      expect(parseQuality(polluted, { 7: 85 }, '7')).toBe(85)
     })
   })
 })
