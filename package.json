@@ -15,7 +15,7 @@
     "avif",
     "jpeg",
     "png",
-    "image tranformation"
+    "image transformation"
   ],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
