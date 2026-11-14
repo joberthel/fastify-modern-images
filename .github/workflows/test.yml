@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  pinact:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -19,6 +19,49 @@ jobs:
         uses: suzuki-shunsuke/pinact-action@b1a1f46bb10f2908950d95f626ca8cc109e2cf7d # v3.1.0
         with:
           fix: 'false'
+
+  commitlint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate conventional commits
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+            if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null || ! git cat-file -e "${HEAD_SHA}^{commit}" 2>/dev/null; then
+              git fetch --no-tags origin "${{ github.event.pull_request.base.ref }}" "refs/pull/${{ github.event.pull_request.number }}/head"
+            fi
+            pnpm exec commitlint --from="${BASE_SHA}" --to="${HEAD_SHA}"
+          else
+            if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+              pnpm exec commitlint --from="HEAD~1" --to="HEAD"
+            else
+              pnpm exec commitlint --last
+            fi
+          fi
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
@@ -37,20 +80,29 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Validate conventional commits
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            pnpm exec commitlint --from="${{ github.event.pull_request.base.sha }}" --to="${{ github.event.pull_request.head.sha }}"
-          else
-            if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
-              pnpm exec commitlint --from="HEAD~1" --to="HEAD"
-            else
-              pnpm exec commitlint --last
-            fi
-          fi
-
       - name: Run tests with coverage
         run: pnpm test:coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run linter
+        run: pnpm lint
