@@ -38,6 +38,8 @@ describe('query parameter validation integration', () => {
       '?width=50&fit=invalid',
       '?width=50&position=invalid',
       '?background=notacolor',
+      '?background=hsl(10,20,30)',
+      '?background=rgb(10%,20,30)',
       '?b=invalid!!!',
       '?b=red&b=blue',
       '?w=50&w=100',

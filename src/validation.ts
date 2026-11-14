@@ -34,7 +34,13 @@ const VALID_POSITION_VALUES = new Set<string>([
 ])
 
 const HEX_COLOR_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
-const FUNC_COLOR_RE = /^(?:rgb|hsl)a?\(\s*\d{1,3}(?:\.\d+)?%?\s*(?:,\s*\d{1,3}(?:\.\d+)?%?\s*){2,3}\)$/i
+const NUM_RE = String.raw`\d{1,3}(?:\.\d+)?`
+const PCT_RE = String.raw`\d{1,3}(?:\.\d+)?%`
+const ALPHA_RE = String.raw`(?:0(?:\.\d+)?|1(?:\.0+)?|\.\d+)`
+const FUNC_COLOR_RE = new RegExp(
+  `^(?:rgba?\\(\\s*(?:${NUM_RE}\\s*,\\s*${NUM_RE}\\s*,\\s*${NUM_RE}|${PCT_RE}\\s*,\\s*${PCT_RE}\\s*,\\s*${PCT_RE})(?:\\s*,\\s*${ALPHA_RE})?\\s*\\)|hsla?\\(\\s*${NUM_RE}\\s*,\\s*${PCT_RE}\\s*,\\s*${PCT_RE}(?:\\s*,\\s*${ALPHA_RE})?\\s*\\))$`,
+  'i',
+)
 
 const NAMED_COLORS = new Set<string>([
   'transparent',
