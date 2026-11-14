@@ -62,6 +62,9 @@ export function getBestFormat(
   flattened: boolean = false,
 ): CompressionConfig | undefined {
   const hasAlpha = !flattened && metadata.hasAlpha === true
+  // Prevent opaque PNGs from converting to lossy JPEG when modern formats
+  // (avif/webp) are not accepted, unless the caller explicitly flattened the
+  // image with a background color.
   const sorted = formats
     .filter(item =>
       item.enabled
