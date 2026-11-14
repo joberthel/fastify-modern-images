@@ -22,6 +22,10 @@ async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModern
       return payload
     }
 
+    if (options.verifyRequest && !(await options.verifyRequest(request))) {
+      return payload
+    }
+
     return processPayload(request, reply, payload, options, inFlight)
   })
 }

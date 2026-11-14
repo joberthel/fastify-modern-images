@@ -48,9 +48,11 @@ fastify
     regex: /.*/, // If it is set will check this regex against request.raw.url (path + query string). Will only apply plugin if it is true.
     quality: '7', // Sets the default quality from '1' (worst), '2', ... '9' (best).
     maxDimension: 4096, // Maximum allowed width/height in pixels for resize query parameters.
+    allowedDimensions: undefined, // Optional allowlist of permitted width/height values (e.g. [320, 640, 1280]).
     maxInputBytes: 50 * 1024 * 1024, // Maximum allowed input/output byte size when buffering streams or payloads.
     withoutEnlargement: true, // Do not enlarge if the width or height are already less than the specified dimensions.
     sharpInputOptions: {}, // Options passed to the sharp(buffer, options) constructor (e.g. limitInputPixels, failOn, sequentialRead).
+    verifyRequest: undefined, // Optional (request) => boolean | Promise<boolean> callback; returning false skips transforms and serves the original payload.
     rembg: {
         model: 'isnet-general-use' // https://github.com/danielgatis/rembg#models
     },
@@ -130,3 +132,53 @@ http://localhost:3000/product.jpeg?ai=u2netp // Define which model should be use
 http://localhost:3000/product.jpeg?ai&background=red
 http://localhost:3000/product.jpeg?a // Short version
 ```
+
+## Security & CDN Caching
+
+Exposing arbitrary image transformation parameters (`width`, `height`, `rotation`, `quality`, etc.) on public endpoints can enable cache-busting DoS attacks that bypass CDNs and saturate `libvips` worker threads.
+
+### Dimension Allowlist
+
+Use `allowedDimensions` to restrict resize dimensions to a fixed set of presets:
+
+```js
+app.register(fastifyModernImages, {
+  allowedDimensions: [320, 640, 1280, 1920],
+})
+```
+
+### Request Verification (HMAC Signature)
+
+Use `verifyRequest` to validate signed transformation URLs before any image processing runs. Returning `false` skips all transformations and serves the original payload unmodified:
+
+```js
+import { Buffer } from 'node:buffer'
+import { createHmac, timingSafeEqual } from 'node:crypto'
+
+const SECRET = process.env.IMAGE_SIGNING_SECRET
+
+app.register(fastifyModernImages, {
+  verifyRequest: (request) => {
+    const { sig, ...params } = request.query
+    if (!sig) {
+      return false
+    }
+
+    const canonical = Object.keys(params)
+      .sort()
+      .map(k => `${k}=${params[k] ?? ''}`)
+      .join('&')
+    const expected = createHmac('sha256', SECRET).update(`${request.url.split('?')[0]}?${canonical}`).digest('hex')
+
+    const sigBuf = Buffer.from(sig, 'utf8')
+    const expBuf = Buffer.from(expected, 'utf8')
+    return sigBuf.length === expBuf.length && timingSafeEqual(sigBuf, expBuf)
+  },
+})
+```
+
+### CDN Caching Best Practices
+
+- Place a CDN (e.g. Cloudflare, Fastly, CloudFront) in front of your Fastify service and include the `Accept` header and query string in the CDN cache key.
+- Set `Cache-Control: public, max-age=31536000, immutable` on static image routes when using content-addressed URLs or signed transformation URLs.
+- Pair `allowedDimensions` or `verifyRequest` with `maxInputBytes` and `sharpInputOptions.limitInputPixels` to bound memory and CPU per request.

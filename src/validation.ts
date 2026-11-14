@@ -80,12 +80,19 @@ export function parseTrim(value?: unknown): boolean {
   return normalized !== 'false' && normalized !== '0'
 }
 
-export function parseDimension(value?: string, maxDimension = MAX_DIMENSION): number | null {
+export function parseDimension(
+  value?: string,
+  maxDimension = MAX_DIMENSION,
+  allowedDimensions?: number[],
+): number | null {
   if (!isNonEmpty(value) || !/^\d+$/.test(value)) {
     return null
   }
   const parsed = Number.parseInt(value, 10)
   if (!Number.isFinite(parsed) || parsed < 1 || parsed > maxDimension) {
+    return null
+  }
+  if (allowedDimensions !== undefined && !allowedDimensions.includes(parsed)) {
     return null
   }
   return parsed

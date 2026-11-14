@@ -91,4 +91,75 @@ describe('query parameter validation integration', () => {
 
     await app.close()
   })
+
+  it('restricts resizing to allowedDimensions when configured', async () => {
+    const app = Fastify()
+    await app.register(fastifyModernImages, {
+      allowedDimensions: [40, 80],
+    })
+    const image = await createTestImage(100, 80)
+
+    app.get('/image.png', async (_req, reply) => {
+      reply.type('image/png')
+      return image
+    })
+
+    const allowedRes = await app.inject({
+      method: 'GET',
+      url: '/image.png?w=40',
+      headers: { accept: 'image/png' },
+    })
+    expect(allowedRes.statusCode).toBe(200)
+    const allowedMeta = await sharp(allowedRes.rawPayload).metadata()
+    expect(allowedMeta.width).toBe(40)
+
+    const disallowedRes = await app.inject({
+      method: 'GET',
+      url: '/image.png?w=50',
+      headers: { accept: 'image/png' },
+    })
+    expect(disallowedRes.statusCode).toBe(200)
+    const disallowedMeta = await sharp(disallowedRes.rawPayload).metadata()
+    expect(disallowedMeta.width).toBe(100)
+
+    await app.close()
+  })
+
+  it('skips transforms when verifyRequest returns false', async () => {
+    const app = Fastify()
+    await app.register(fastifyModernImages, {
+      verifyRequest: async (request) => {
+        const query = request.query as Record<string, string | undefined>
+        return query.sig === 'valid'
+      },
+    })
+    const image = await createTestImage(100, 80)
+
+    app.get('/image.png', async (_req, reply) => {
+      reply.type('image/png')
+      return image
+    })
+
+    const unverifiedRes = await app.inject({
+      method: 'GET',
+      url: '/image.png?w=40',
+      headers: { accept: 'image/webp' },
+    })
+    expect(unverifiedRes.statusCode).toBe(200)
+    expect(unverifiedRes.headers['content-type']).toBe('image/png')
+    const unverifiedMeta = await sharp(unverifiedRes.rawPayload).metadata()
+    expect(unverifiedMeta.width).toBe(100)
+
+    const verifiedRes = await app.inject({
+      method: 'GET',
+      url: '/image.png?w=40&sig=valid',
+      headers: { accept: 'image/webp' },
+    })
+    expect(verifiedRes.statusCode).toBe(200)
+    expect(verifiedRes.headers['content-type']).toBe('image/webp')
+    const verifiedMeta = await sharp(verifiedRes.rawPayload).metadata()
+    expect(verifiedMeta.width).toBe(40)
+
+    await app.close()
+  })
 })

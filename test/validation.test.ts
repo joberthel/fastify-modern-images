@@ -34,6 +34,17 @@ describe('validation helpers', () => {
       expect(parseDimension('100.5')).toBeNull()
       expect(parseDimension(' 100')).toBeNull()
     })
+
+    it('restricts dimensions to allowedDimensions when provided', () => {
+      const allowed = [320, 640, 1280]
+      expect(parseDimension('320', MAX_DIMENSION, allowed)).toBe(320)
+      expect(parseDimension('640', MAX_DIMENSION, allowed)).toBe(640)
+      expect(parseDimension('1280', MAX_DIMENSION, allowed)).toBe(1280)
+      expect(parseDimension('100', MAX_DIMENSION, allowed)).toBeNull()
+      expect(parseDimension('641', MAX_DIMENSION, allowed)).toBeNull()
+      expect(parseDimension('1280', 1000, allowed)).toBeNull()
+      expect(parseDimension('320', MAX_DIMENSION, [])).toBeNull()
+    })
   })
 
   describe('parseRotation', () => {

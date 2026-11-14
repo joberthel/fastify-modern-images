@@ -1,3 +1,4 @@
+import type { FastifyRequest } from 'fastify'
 import type sharp from 'sharp'
 
 export interface MinifyQuerystring {
@@ -72,11 +73,13 @@ export interface ResolvedFastifyModernImagesOptions {
   regex: RegExp
   quality: string | number
   maxDimension: number
+  allowedDimensions?: number[]
   maxInputBytes: number
   withoutEnlargement: boolean
   rembg: RembgOptions
   compression: Record<string, CompressionConfig>
   sharpInputOptions?: sharp.SharpOptions
+  verifyRequest?: (request: FastifyRequest<MinifyRequest>) => boolean | Promise<boolean>
 }
 
 export type FastifyModernImagesOptionsCompression = Partial<CompressionConfig>
@@ -85,9 +88,11 @@ export interface FastifyModernImagesOptions {
   regex?: RegExp
   quality?: string | number
   maxDimension?: number
+  allowedDimensions?: number[]
   maxInputBytes?: number
   withoutEnlargement?: boolean
   rembg?: Partial<RembgOptions>
   compression?: Record<string, FastifyModernImagesOptionsCompression>
   sharpInputOptions?: sharp.SharpOptions
+  verifyRequest?: (request: FastifyRequest<MinifyRequest>) => boolean | Promise<boolean>
 }

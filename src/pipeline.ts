@@ -12,11 +12,11 @@ export const processedReplies = new WeakSet<FastifyReply>()
 function applyResize(
   instance: sharp.Sharp,
   query: MinifyQuerystring,
-  options: Pick<ResolvedFastifyModernImagesOptions, 'maxDimension' | 'withoutEnlargement'>,
+  options: Pick<ResolvedFastifyModernImagesOptions, 'maxDimension' | 'withoutEnlargement' | 'allowedDimensions'>,
   background?: string,
 ): void {
-  const width = parseDimension(query.width ?? query.w, options.maxDimension)
-  const height = parseDimension(query.height ?? query.h, options.maxDimension)
+  const width = parseDimension(query.width ?? query.w, options.maxDimension, options.allowedDimensions)
+  const height = parseDimension(query.height ?? query.h, options.maxDimension, options.allowedDimensions)
 
   if (width === null && height === null) {
     return
@@ -33,7 +33,7 @@ function applyResize(
 function applySharpTransforms(
   instance: sharp.Sharp,
   query: MinifyQuerystring,
-  options: Pick<ResolvedFastifyModernImagesOptions, 'maxDimension' | 'withoutEnlargement'>,
+  options: Pick<ResolvedFastifyModernImagesOptions, 'maxDimension' | 'withoutEnlargement' | 'allowedDimensions'>,
 ): void {
   const background = parseBackground(query.background ?? query.b)
   const rotation = parseRotation(query.rotation ?? query.r)
