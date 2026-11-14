@@ -29,10 +29,10 @@ function formatExitError(code: number | null, signal: NodeJS.Signals | null, std
   const status = code !== null
     ? `code ${code}`
     : `signal ${signal ?? 'unknown'}`
-  const details = stderr
-    ? `: ${stderr}`
-    : ''
-  return new Error(`rembg exited with ${status}${details}`)
+  if (stderr) {
+    console.error(`rembg exited with ${status}: ${stderr}`)
+  }
+  return new Error(`rembg exited with ${status}`)
 }
 
 export function validateRembgModel(model: string, allowedModels?: string[]): void {

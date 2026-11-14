@@ -39,6 +39,7 @@ function createRequest(overrides: Record<string, unknown> = {}) {
     log: {
       info: vi.fn(),
       warn: vi.fn(),
+      error: vi.fn(),
     },
     ...overrides,
   }
@@ -363,11 +364,12 @@ describe('fastifyModernImages unit tests - transforms and encoding', () => {
     mockSharpInstance.toFormat.mockReturnValueOnce({
       toBuffer: vi.fn().mockRejectedValueOnce(new Error('encode failed')),
     })
-    await expect(
-      onSend(createRequest({
-        raw: { url: '/fail.jpg' },
-      }), createReply('image/jpeg'), Buffer.from('raw')),
-    ).rejects.toThrow('encode failed')
+    const failReq = createRequest({
+      raw: { url: '/fail.jpg' },
+    })
+    const fallback = await onSend(failReq, createReply('image/jpeg'), Buffer.from('raw'))
+    expect(fallback).toEqual(Buffer.from('raw'))
+    expect(failReq.log.error).toHaveBeenCalledTimes(1)
 
     mockSharpInstance.toFormat.mockReturnValueOnce({
       toBuffer: vi.fn().mockResolvedValueOnce(Buffer.from('recovered')),

@@ -240,7 +240,7 @@ describe('utils - removeBackground (exit codes and signals)', () => {
     child.stderr.end('model not found')
     child.emit('close', 1, null)
 
-    await expect(promise).rejects.toThrow('rembg exited with code 1: model not found')
+    await expect(promise).rejects.toThrow('rembg exited with code 1')
   })
 
   it('should reject with signal when terminated by signal', async () => {
@@ -269,7 +269,7 @@ describe('utils - removeBackground (exit codes and signals)', () => {
     child.stderr.end('broken pipe')
     child.emit('close', 1, null)
 
-    await expect(promise).rejects.toThrow('rembg exited with code 1: broken pipe')
+    await expect(promise).rejects.toThrow('rembg exited with code 1')
   })
 })
 

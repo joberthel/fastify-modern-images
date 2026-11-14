@@ -176,49 +176,59 @@ export async function processPayload(
   }
 
   const { buffer, inputLength } = await resolveInputBuffer(payload, request.query, options.rembg, options.maxInputBytes)
-  const instance = sharp(buffer, options.sharpInputOptions)
 
-  if (parseTrim(request.query.trim ?? request.query.t)) {
-    instance.trim()
+  try {
+    const instance = sharp(buffer, options.sharpInputOptions)
+
+    if (parseTrim(request.query.trim ?? request.query.t)) {
+      instance.trim()
+    }
+
+    const metadata = await instance.metadata()
+    const flattened = isNonEmpty(parseBackground(request.query.background ?? request.query.b))
+    const format = getBestFormat(accept, metadata, compressionList, flattened)
+
+    if (format === false) {
+      const inputType = String(reply.getHeader('Content-Type') ?? '')
+      request.log.warn(`No adequate format for image of type "${inputType}" was found.`)
+      return buffer
+    }
+
+    const quality = parseQuality(request.query.quality ?? request.query.q, format.quality, options.quality)
+    const ai = request.query.ai ?? request.query.a
+    const aiModel = options.rembg.enabled && typeof ai === 'string'
+      ? (ai.length > 0
+          ? ai
+          : options.rembg.model)
+      : undefined
+    const upstreamEtag = reply.getHeader('etag')
+    const derivedEtag = typeof upstreamEtag === 'string' && upstreamEtag.length > 0
+      ? computeDerivedEtag(upstreamEtag, format.format, quality, request.query, aiModel, options.maxDimension)
+      : undefined
+
+    if (derivedEtag !== undefined && matchesIfNoneMatch(request.headers['if-none-match'], derivedEtag)) {
+      reply.code(304)
+      reply.header('ETag', derivedEtag)
+      reply.header('Vary', appendVaryHeader(reply.getHeader('Vary'), 'Accept'))
+      reply.removeHeader('Content-Length')
+      reply.removeHeader('accept-ranges')
+      processedReplies.add(reply)
+      return ''
+    }
+
+    return await encodeAndReply(instance, request, reply, {
+      format,
+      options,
+      inputLength,
+      quality,
+      derivedEtag,
+    }, inFlight)
   }
-
-  const metadata = await instance.metadata()
-  const flattened = isNonEmpty(parseBackground(request.query.background ?? request.query.b))
-  const format = getBestFormat(accept, metadata, compressionList, flattened)
-
-  if (format === false) {
-    const inputType = String(reply.getHeader('Content-Type') ?? '')
-    request.log.warn(`No adequate format for image of type "${inputType}" was found.`)
+  catch (err) {
+    if (err instanceof Error && err.message.includes('pixel limit')) {
+      throw err
+    }
+    request.log.error(err)
     return buffer
   }
-
-  const quality = parseQuality(request.query.quality ?? request.query.q, format.quality, options.quality)
-  const ai = request.query.ai ?? request.query.a
-  const aiModel = options.rembg.enabled && typeof ai === 'string'
-    ? (ai.length > 0
-        ? ai
-        : options.rembg.model)
-    : undefined
-  const upstreamEtag = reply.getHeader('etag')
-  const derivedEtag = typeof upstreamEtag === 'string' && upstreamEtag.length > 0
-    ? computeDerivedEtag(upstreamEtag, format.format, quality, request.query, aiModel, options.maxDimension)
-    : undefined
-
-  if (derivedEtag !== undefined && matchesIfNoneMatch(request.headers['if-none-match'], derivedEtag)) {
-    reply.code(304)
-    reply.header('ETag', derivedEtag)
-    reply.header('Vary', appendVaryHeader(reply.getHeader('Vary'), 'Accept'))
-    reply.removeHeader('Content-Length')
-    reply.removeHeader('accept-ranges')
-    processedReplies.add(reply)
-    return ''
-  }
-
-  return encodeAndReply(instance, request, reply, {
-    format,
-    options,
-    inputLength,
-    quality,
-    derivedEtag,
-  }, inFlight)
 }
