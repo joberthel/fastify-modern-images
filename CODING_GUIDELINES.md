@@ -11,4 +11,4 @@
 
 ## Commits and Git hygiene
 
-**Follow Conventional Commits.** Commit messages follow `<type>: <description>`. Types are restricted to: `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style` and `test`. Scopes are not allowed. An explanatory body separated by a blank line is encouraged for non-trivial context.
+**Follow Conventional Commits.** Commit messages follow `<type>: <description>`. Types are restricted to: `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style` and `test`. Scopes are not allowed. An explanatory body separated by a blank line is encouraged for non-trivial context. If the work is associated with a GitHub issue, reference it in the commit message body (e.g., `Closes #<issue-number>` or `Refs #<issue-number>`).
