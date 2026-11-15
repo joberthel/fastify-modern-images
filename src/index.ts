@@ -33,7 +33,10 @@ async function fastifyModernImages(fastify: FastifyInstance, opts: FastifyModern
   })
 }
 
-export default fp(fastifyModernImages, {
+const plugin = fp(fastifyModernImages, {
   fastify: '5.x',
   name: 'fastify-modern-images',
 })
+
+// eslint-disable-next-line no-restricted-syntax
+export = plugin

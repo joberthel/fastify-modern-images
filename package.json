@@ -1,5 +1,6 @@
 {
   "name": "fastify-modern-images",
+  "type": "commonjs",
   "version": "0.8.0",
   "packageManager": "pnpm@12.18.0",
   "description": "Fastify plugin, which converts images automatically into modern formats.",
