@@ -67,7 +67,7 @@
     "jiti": "^2.7.0",
     "publint": "^0.3.25",
     "tsc-watch": "^7.2.1",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^5.1.0"
   }
 }
