@@ -61,16 +61,19 @@ export function createConcurrencyLimiter(limit?: number): ConcurrencyLimiter {
     if (activeCount >= limit) {
       await new Promise<void>(resolve => waitQueue.push(resolve))
     }
-
-    activeCount++
+    else {
+      activeCount++
+    }
     try {
       return await fn()
     }
     finally {
-      activeCount--
       const next = waitQueue.shift()
       if (next) {
         next()
+      }
+      else {
+        activeCount--
       }
     }
   }

@@ -295,4 +295,40 @@ describe('rembg - removeBackground (validation, timeout, concurrency, endpoint)'
 
     vi.unstubAllGlobals()
   })
+
+  it('does not exceed concurrency limit when a new task starts during waiter wakeup', async () => {
+    const limiter = createConcurrencyLimiter(1)
+    let active = 0
+    let maxActive = 0
+
+    let resolveTask1!: () => void
+    const task1Gate = new Promise<void>((resolve) => {
+      resolveTask1 = resolve
+    })
+
+    const runTracked = async (gate?: Promise<void>) => {
+      active++
+      maxActive = Math.max(maxActive, active)
+      try {
+        if (gate) {
+          await gate
+        }
+      }
+      finally {
+        active--
+      }
+    }
+
+    const p1 = limiter(async () => runTracked(task1Gate))
+    const p2 = limiter(async () => runTracked())
+
+    // Finish task 1 and immediately schedule task 3 in the same microtask turn
+    // before task 2's woken continuation microtask executes.
+    resolveTask1()
+    await p1
+    const p3 = limiter(async () => runTracked())
+
+    await Promise.all([p2, p3])
+    expect(maxActive).toBe(1)
+  })
 })
