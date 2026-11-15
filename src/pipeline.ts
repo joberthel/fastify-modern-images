@@ -132,25 +132,72 @@ function buildCoalescingKey(
   ].join('|')
 }
 
+interface InFlightState {
+  controller: AbortController
+  activeWaiters: number
+}
+
+const inFlightStates = new WeakMap<Promise<CoalescedPipelineResult>, InFlightState>()
+
 async function coalesceTransformAndEncode(
   key: string,
-  runTransformAndEncode: () => Promise<CoalescedPipelineResult>,
-  inFlight?: Map<string, Promise<CoalescedPipelineResult>>,
+  runTransformAndEncode: (signal: AbortSignal) => Promise<CoalescedPipelineResult>,
+  inFlight: Map<string, Promise<CoalescedPipelineResult>> | undefined,
+  attachDisconnectListener: (onDisconnect: () => void) => () => void,
 ): Promise<CoalescedPipelineResult> {
   if (!inFlight) {
-    return runTransformAndEncode()
+    const controller = new AbortController()
+    const detach = attachDisconnectListener(() => controller.abort())
+    try {
+      return await runTransformAndEncode(controller.signal)
+    }
+    finally {
+      detach()
+    }
   }
 
   let promise = inFlight.get(key)
+  let state: InFlightState | undefined
   if (!promise) {
-    promise = runTransformAndEncode()
+    const controller = new AbortController()
+    state = { controller, activeWaiters: 0 }
+    promise = runTransformAndEncode(controller.signal)
+    inFlightStates.set(promise, state)
     inFlight.set(key, promise)
   }
+  else {
+    state = inFlightStates.get(promise)
+  }
+
+  let waiterRemoved = false
+  if (state) {
+    state.activeWaiters += 1
+  }
+
+  const detach = attachDisconnectListener(() => {
+    if (waiterRemoved) {
+      return
+    }
+    waiterRemoved = true
+    if (state) {
+      state.activeWaiters -= 1
+      if (state.activeWaiters <= 0) {
+        state.controller.abort()
+      }
+    }
+  })
 
   try {
     return await promise
   }
   finally {
+    detach()
+    if (!waiterRemoved) {
+      waiterRemoved = true
+      if (state) {
+        state.activeWaiters -= 1
+      }
+    }
     if (inFlight.get(key) === promise) {
       inFlight.delete(key)
     }
@@ -297,7 +344,6 @@ export async function processPayload(
     aiModel,
   )
 
-  const controller = new AbortController()
   const rawRequest = request.raw as {
     on?: (event: string, listener: () => void) => void
     off?: (event: string, listener: () => void) => void
@@ -306,21 +352,34 @@ export async function processPayload(
     complete?: boolean
   } | undefined
 
-  const onRequestClose = () => {
-    if (rawRequest?.destroyed === true || rawRequest?.complete === false || reply.raw?.writableEnded !== true) {
-      controller.abort()
+  const attachDisconnectListener = (onDisconnect: () => void): (() => void) => {
+    const onRequestClose = () => {
+      if (rawRequest?.destroyed === true || rawRequest?.complete === false || reply.raw?.writableEnded !== true) {
+        onDisconnect()
+      }
+    }
+
+    if (rawRequest?.destroyed === true) {
+      onDisconnect()
+      return () => {}
+    }
+
+    if (typeof rawRequest?.on === 'function') {
+      rawRequest.on('close', onRequestClose)
+    }
+
+    return () => {
+      if (typeof rawRequest?.off === 'function') {
+        rawRequest.off('close', onRequestClose)
+      }
+      else if (typeof rawRequest?.removeListener === 'function') {
+        rawRequest.removeListener('close', onRequestClose)
+      }
     }
   }
 
-  if (rawRequest?.destroyed === true) {
-    controller.abort()
-  }
-  else if (typeof rawRequest?.on === 'function') {
-    rawRequest.on('close', onRequestClose)
-  }
-
   try {
-    const result = await coalesceTransformAndEncode(key, async () => {
+    const result = await coalesceTransformAndEncode(key, async (signal) => {
       const buffer = aiModel !== undefined
         ? await removeBackground(inputBuffer, aiModel, {
             allowedModels: options.rembg.allowedModels,
@@ -329,7 +388,7 @@ export async function processPayload(
             limiter: rembgLimiter,
             endpoint: options.rembg.endpoint,
             maxOutputBytes: options.maxInputBytes,
-            signal: controller.signal,
+            signal,
           })
         : inputBuffer
 
@@ -377,7 +436,7 @@ export async function processPayload(
         quality,
         derivedEtag,
       }
-    }, inFlight)
+    }, inFlight, attachDisconnectListener)
 
     if (result.status === 'bypass') {
       return inputBuffer
@@ -402,13 +461,5 @@ export async function processPayload(
     }
     request.log.error(err)
     return inputBuffer
-  }
-  finally {
-    if (typeof rawRequest?.off === 'function') {
-      rawRequest.off('close', onRequestClose)
-    }
-    else if (typeof rawRequest?.removeListener === 'function') {
-      rawRequest.removeListener('close', onRequestClose)
-    }
   }
 }

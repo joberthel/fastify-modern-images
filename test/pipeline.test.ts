@@ -521,3 +521,187 @@ describe('pipeline - animated / multi-page image bypass', () => {
     expect(req.log.warn).not.toHaveBeenCalled()
   })
 })
+
+describe('pipeline - coalesced request disconnect handling', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  function createDeferred<T>() {
+    let resolve!: (value: T | PromiseLike<T>) => void
+    let reject!: (reason?: unknown) => void
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res
+      reject = rej
+    })
+    return { promise, resolve, reject }
+  }
+
+  function createMockReply() {
+    const headers = new Map<string, unknown>([
+      ['content-type', 'image/png'],
+    ])
+
+    return {
+      raw: { writableEnded: false },
+      code: vi.fn().mockReturnThis(),
+      type: vi.fn().mockReturnThis(),
+      header: vi.fn((key: string, val: unknown) => {
+        headers.set(key.toLowerCase(), val)
+        return this
+      }),
+      getHeader: vi.fn((key: string) => headers.get(key.toLowerCase())),
+      removeHeader: vi.fn((key: string) => {
+        headers.delete(key.toLowerCase())
+      }),
+    }
+  }
+
+  it('does not abort shared in-flight removeBackground when leader disconnects while follower is waiting', async () => {
+    const options = resolveOptions({
+      rembg: { enabled: true },
+    })
+    const inFlight = new Map<string, Promise<CoalescedPipelineResult>>()
+    const inputBuffer = Buffer.from('input-png')
+    const rembgBuffer = Buffer.from('rembg-png')
+    const encodedBuffer = Buffer.from('encoded-avif')
+
+    const rembgDeferred = createDeferred<Buffer>()
+    let capturedSignal: AbortSignal | undefined
+    removeBackgroundMock.mockImplementation(async (_buf, _model, opts) => {
+      capturedSignal = opts?.signal
+      return rembgDeferred.promise
+    })
+
+    sharpMock.mockReturnValue({
+      metadata: vi.fn().mockResolvedValue({ width: 100, height: 100, format: 'png' }),
+      rotate: vi.fn().mockReturnThis(),
+      toFormat: vi.fn().mockReturnValue({
+        toBuffer: vi.fn().mockResolvedValue(encodedBuffer),
+      }),
+    })
+
+    const leaderRaw = Object.assign(new EventEmitter(), {
+      url: '/photo.png?ai=1',
+      destroyed: false,
+      complete: true,
+    })
+    const followerRaw = Object.assign(new EventEmitter(), {
+      url: '/photo.png?ai=1',
+      destroyed: false,
+      complete: true,
+    })
+
+    const leaderReq = {
+      raw: leaderRaw,
+      headers: { accept: 'image/avif,image/webp,*/*' },
+      query: { ai: '1' },
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+    const followerReq = {
+      raw: followerRaw,
+      headers: { accept: 'image/avif,image/webp,*/*' },
+      query: { ai: '1' },
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+
+    const pLeader = processPayload(leaderReq as never, createMockReply() as never, inputBuffer, options, inFlight)
+    const pFollower = processPayload(followerReq as never, createMockReply() as never, inputBuffer, options, inFlight)
+
+    await vi.waitFor(() => {
+      expect(removeBackgroundMock).toHaveBeenCalledTimes(1)
+    })
+
+    // Leader disconnects while follower is still waiting
+    leaderRaw.destroyed = true
+    leaderRaw.emit('close')
+
+    expect(capturedSignal?.aborted).toBe(false)
+
+    rembgDeferred.resolve(rembgBuffer)
+    const [, followerResult] = await Promise.all([pLeader, pFollower])
+
+    expect(followerResult).toBe(encodedBuffer)
+    expect(followerReq.log.error).not.toHaveBeenCalled()
+    expect(inFlight.size).toBe(0)
+  })
+
+  it('aborts shared in-flight removeBackground when all coalesced waiters disconnect', async () => {
+    const options = resolveOptions({
+      rembg: { enabled: true },
+    })
+    const inFlight = new Map<string, Promise<CoalescedPipelineResult>>()
+    const inputBuffer = Buffer.from('input-png')
+
+    const rembgDeferred = createDeferred<Buffer>()
+    let capturedSignal: AbortSignal | undefined
+    removeBackgroundMock.mockImplementation(async (_buf, _model, opts) => {
+      capturedSignal = opts?.signal
+      return rembgDeferred.promise
+    })
+
+    const leaderRaw = Object.assign(new EventEmitter(), {
+      url: '/photo.png?ai=1',
+      destroyed: false,
+      complete: true,
+    })
+    const followerRaw = Object.assign(new EventEmitter(), {
+      url: '/photo.png?ai=1',
+      destroyed: false,
+      complete: true,
+    })
+
+    const leaderReq = {
+      raw: leaderRaw,
+      headers: { accept: 'image/avif,image/webp,*/*' },
+      query: { ai: '1' },
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+    const followerReq = {
+      raw: followerRaw,
+      headers: { accept: 'image/avif,image/webp,*/*' },
+      query: { ai: '1' },
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+
+    const pLeader = processPayload(leaderReq as never, createMockReply() as never, inputBuffer, options, inFlight)
+    const pFollower = processPayload(followerReq as never, createMockReply() as never, inputBuffer, options, inFlight)
+
+    await vi.waitFor(() => {
+      expect(removeBackgroundMock).toHaveBeenCalledTimes(1)
+    })
+
+    leaderRaw.destroyed = true
+    leaderRaw.emit('close')
+    expect(capturedSignal?.aborted).toBe(false)
+
+    followerRaw.destroyed = true
+    followerRaw.emit('close')
+    expect(capturedSignal?.aborted).toBe(true)
+
+    const abortErr = new Error('The operation was aborted')
+    abortErr.name = 'AbortError'
+    rembgDeferred.reject(abortErr)
+
+    const [leaderResult, followerResult] = await Promise.all([pLeader, pFollower])
+    expect(leaderResult).toBe(inputBuffer)
+    expect(followerResult).toBe(inputBuffer)
+    expect(inFlight.size).toBe(0)
+  })
+})
