@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.8.1](https://github.com/joberthel/fastify-modern-images/compare/fastify-modern-images-v0.8.0...fastify-modern-images-v0.8.1) (2026-11-15)
+
+
+### Bug Fixes
+
+* prevent concurrency limiter from exceeding limit on wakeup ([723438e](https://github.com/joberthel/fastify-modern-images/commit/723438ea5416e08cebba179463293e01f4916d5f)), closes [#93](https://github.com/joberthel/fastify-modern-images/issues/93)
+* prevent leader disconnect from aborting coalesced transforms ([125784d](https://github.com/joberthel/fastify-modern-images/commit/125784d3ab6a7d4e4fe3914db62b65dea602f78e)), closes [#85](https://github.com/joberthel/fastify-modern-images/issues/85)
+* use export = for CJS/ESM and NodeNext interop ([e439dd3](https://github.com/joberthel/fastify-modern-images/commit/e439dd3438399a95e70d70935289b00dc2c26fa7)), closes [#96](https://github.com/joberthel/fastify-modern-images/issues/96)
+
 ## [0.8.0](https://github.com/joberthel/fastify-modern-images/compare/fastify-modern-images-v0.7.0...fastify-modern-images-v0.8.0) (2026-11-14)
 
 
