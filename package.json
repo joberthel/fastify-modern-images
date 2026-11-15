@@ -42,6 +42,7 @@
     "test:e2e": "vitest run e2e/",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "lint:pkg": "publint && attw --pack .",
     "commitlint": "commitlint"
   },
   "peerDependencies": {
@@ -53,6 +54,7 @@
   },
   "devDependencies": {
     "@antfu/eslint-config": "^10.0.0",
+    "@arethetypeswrong/cli": "^0.18.5",
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.4",
     "@commitlint/types": "^21.2.3",
@@ -63,6 +65,7 @@
     "fastify": "^5.12.8",
     "husky": "^9.1.7",
     "jiti": "^2.7.0",
+    "publint": "^0.3.25",
     "tsc-watch": "^7.2.1",
     "typescript": "^6.0.3",
     "vitest": "^5.1.0"
