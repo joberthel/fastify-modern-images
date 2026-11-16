@@ -17,7 +17,7 @@ updates:
           - '*'
     ignore:
       - dependency-name: typescript
-        versions: 
+        versions:
           - ~7.0.0
 
   - package-ecosystem: github-actions
