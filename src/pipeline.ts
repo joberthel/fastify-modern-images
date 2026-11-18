@@ -59,9 +59,12 @@ function applySharpTransforms(
   params: NormalizedTransformParams,
   options: Pick<ResolvedFastifyModernImagesOptions, 'withoutEnlargement'>,
 ): void {
-  // Called unconditionally so sharp auto-orients images from their EXIF orientation tag
-  // when rotation is undefined, before EXIF metadata is stripped on output.
-  instance.rotate(params.rotation, { background: params.background })
+  // Always auto-orient images from their EXIF orientation tag before any explicit
+  // rotation, since sharp.rotate(angle) ignores EXIF orientation.
+  instance.autoOrient()
+  if (params.rotation !== undefined) {
+    instance.rotate(params.rotation, { background: params.background })
+  }
   applyResize(instance, params, options)
 
   if (isNonEmptyString(params.background)) {

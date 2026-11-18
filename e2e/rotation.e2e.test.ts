@@ -76,4 +76,17 @@ describe('rotation and EXIF auto-orientation', () => {
     expect(metadata.width).toBe(20)
     expect(metadata.height).toBe(40)
   })
+
+  it('preserves EXIF auto-orientation when ?rotation=90 is provided', async () => {
+    const response = await server.inject({
+      method: 'GET',
+      url: '/exif-rotated.jpg?rotation=90',
+    })
+
+    expect(response.statusCode).toBe(200)
+    const metadata = await sharp(response.rawPayload).metadata()
+    expect(metadata.width).toBe(40)
+    expect(metadata.height).toBe(20)
+    expect(metadata.orientation).toBeUndefined()
+  })
 })

@@ -251,6 +251,7 @@ describe('pipeline - request coalescing', () => {
     })
     sharpMock.mockReturnValue({
       metadata: vi.fn().mockResolvedValue({ width: 200, height: 200, format: 'jpeg' }),
+      autoOrient: vi.fn().mockReturnThis(),
       rotate: vi.fn().mockReturnThis(),
       resize: vi.fn().mockReturnThis(),
       toFormat: toFormatMock,
@@ -314,6 +315,7 @@ describe('pipeline - request coalescing', () => {
         : deferredB.promise
       return {
         metadata: vi.fn().mockResolvedValue({ width: 100, height: 100, format: 'jpeg' }),
+        autoOrient: vi.fn().mockReturnThis(),
         rotate: vi.fn().mockReturnThis(),
         resize: vi.fn().mockReturnThis(),
         toFormat: vi.fn().mockReturnValue({
@@ -373,6 +375,7 @@ describe('pipeline - request coalescing', () => {
 
     sharpMock.mockReturnValue({
       metadata: vi.fn().mockResolvedValue({ width: 100, height: 100, format: 'png' }),
+      autoOrient: vi.fn().mockReturnThis(),
       rotate: vi.fn().mockReturnThis(),
       resize: vi.fn().mockReturnThis(),
       toFormat: vi.fn().mockReturnValue({
@@ -575,6 +578,7 @@ describe('pipeline - coalesced request disconnect handling', () => {
 
     sharpMock.mockReturnValue({
       metadata: vi.fn().mockResolvedValue({ width: 100, height: 100, format: 'png' }),
+      autoOrient: vi.fn().mockReturnThis(),
       rotate: vi.fn().mockReturnThis(),
       toFormat: vi.fn().mockReturnValue({
         toBuffer: vi.fn().mockResolvedValue(encodedBuffer),
