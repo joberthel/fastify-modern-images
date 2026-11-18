@@ -178,4 +178,69 @@ describe('plugin options', () => {
     )
     await badQualityServer.close()
   })
+
+  it('passes through original payload on maxInputBytes when onLimitExceeded is passthrough', async () => {
+    const passthroughServer = fastify()
+    passthroughServer.register(fastifyModernImages, {
+      maxInputBytes: 100,
+      onLimitExceeded: 'passthrough',
+    })
+    passthroughServer.register(fastifyStatic, {
+      root: path.join(__dirname, '../example/public'),
+      prefix: '/',
+    })
+    const rawPayload = Buffer.alloc(101, 0x41)
+    passthroughServer.get('/buffer.jpg', async (_req, reply) => {
+      reply.type('image/jpeg')
+      return rawPayload
+    })
+    await passthroughServer.ready()
+
+    try {
+      const streamRes = await passthroughServer.inject({
+        method: 'GET',
+        url: '/test.jpg',
+        headers: { accept: 'image/webp' },
+      })
+      expect(streamRes.statusCode).toBe(200)
+      expect(streamRes.headers['content-type']).toBe('image/jpeg')
+
+      const bufferRes = await passthroughServer.inject({
+        method: 'GET',
+        url: '/buffer.jpg',
+        headers: { accept: 'image/webp' },
+      })
+      expect(bufferRes.statusCode).toBe(200)
+      expect(bufferRes.rawPayload).toEqual(rawPayload)
+    }
+    finally {
+      await passthroughServer.close()
+    }
+  })
+
+  it('passes through original payload on limitInputPixels when onLimitExceeded is passthrough', async () => {
+    const pixelPassthroughServer = fastify()
+    pixelPassthroughServer.register(fastifyModernImages, {
+      onLimitExceeded: 'passthrough',
+      sharpInputOptions: { limitInputPixels: 1 },
+    })
+    pixelPassthroughServer.register(fastifyStatic, {
+      root: path.join(__dirname, '../example/public'),
+      prefix: '/',
+    })
+    await pixelPassthroughServer.ready()
+
+    try {
+      const pixelRes = await pixelPassthroughServer.inject({
+        method: 'GET',
+        url: '/test.jpg',
+        headers: { accept: 'image/webp' },
+      })
+      expect(pixelRes.statusCode).toBe(200)
+      expect(pixelRes.headers['content-type']).toBe('image/jpeg')
+    }
+    finally {
+      await pixelPassthroughServer.close()
+    }
+  })
 })

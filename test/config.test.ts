@@ -160,6 +160,11 @@ describe('config - resolveOptions', () => {
       rembg: { endpoint: '' },
     })).toThrow('Invalid rembg.endpoint option')
   })
+
+  it('should default onLimitExceeded to error and allow passthrough', () => {
+    expect(resolveOptions({}).onLimitExceeded).toBe('error')
+    expect(resolveOptions({ onLimitExceeded: 'passthrough' }).onLimitExceeded).toBe('passthrough')
+  })
 })
 
 describe('config - deepMerge', () => {

@@ -127,6 +127,7 @@ export interface ResolvedFastifyModernImagesOptions {
   maxDimension: number
   allowedDimensions?: number[]
   maxInputBytes: number
+  onLimitExceeded: 'passthrough' | 'error'
   withoutEnlargement: boolean
   rembg: RembgOptions
   compression: Record<ImageFormat, CompressionConfig>
@@ -169,6 +170,13 @@ export interface FastifyModernImagesOptions {
    * @default 50 * 1024 * 1024
    */
   maxInputBytes?: number
+  /**
+   * Behavior when an input payload exceeds `maxInputBytes` or `sharpInputOptions.limitInputPixels`.
+   * - `'error'`: Abort processing and throw an `InputLimitExceededError` (HTTP `500`).
+   * - `'passthrough'`: Log a warning and serve the original payload unmodified when possible.
+   * @default 'error'
+   */
+  onLimitExceeded?: 'passthrough' | 'error'
   /**
    * Do not enlarge if the image width or height is already less than the specified dimensions.
    * @default true

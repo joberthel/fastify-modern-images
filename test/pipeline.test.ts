@@ -58,6 +58,29 @@ describe('pipeline - isFatalInputLimitError', () => {
     expect(isFatalInputLimitError(null)).toBe(false)
     expect(isFatalInputLimitError(undefined)).toBe(false)
   })
+
+  it('matches real sharp limitInputPixels error (contract test)', async () => {
+    const { default: realSharp } = await vi.importActual<{ default: typeof import('sharp') }>('sharp')
+    const pngBuffer = await realSharp({
+      create: {
+        width: 2,
+        height: 2,
+        channels: 3,
+        background: { r: 255, g: 0, b: 0 },
+      },
+    }).png().toBuffer()
+
+    let caughtError: unknown
+    try {
+      await realSharp(pngBuffer, { limitInputPixels: 1 }).metadata()
+    }
+    catch (err) {
+      caughtError = err
+    }
+
+    expect(caughtError).toBeInstanceOf(Error)
+    expect(isFatalInputLimitError(caughtError)).toBe(true)
+  })
 })
 
 describe('pipeline - 304 Not Modified short-circuit', () => {
@@ -832,5 +855,154 @@ describe('pipeline - Vary and Cache-Control on fallback paths', () => {
     expect(reply.headers.get('vary')).toBe('Accept')
     expect(reply.headers.get('cache-control')).toBe('no-store')
     expect(req.log.error).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('pipeline - input limit handling and Content-Length short-circuit', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  function createReply(contentLength?: number | string) {
+    const headers = new Map<string, unknown>()
+    headers.set('content-type', 'image/jpeg')
+    if (contentLength !== undefined) {
+      headers.set('content-length', contentLength)
+    }
+
+    return {
+      code: vi.fn().mockReturnThis(),
+      header: vi.fn((key: string, val: unknown) => {
+        headers.set(key.toLowerCase(), val)
+      }),
+      getHeader: vi.fn((key: string) => headers.get(key.toLowerCase())),
+      removeHeader: vi.fn((key: string) => {
+        headers.delete(key.toLowerCase())
+      }),
+    }
+  }
+
+  function createRequest() {
+    return {
+      headers: { accept: 'image/avif,image/webp,*/*' },
+      query: {},
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+  }
+
+  it('destroys stream and throws InputLimitExceededError without buffering when Content-Length exceeds maxInputBytes in error mode', async () => {
+    const options = resolveOptions({ maxInputBytes: 100, onLimitExceeded: 'error' })
+    const stream = new PassThrough()
+    const destroySpy = vi.spyOn(stream, 'destroy')
+    const reply = createReply('101')
+    const request = createRequest()
+
+    await expect(
+      processPayload(request as never, reply as never, stream, options),
+    ).rejects.toBeInstanceOf(InputLimitExceededError)
+
+    expect(destroySpy).toHaveBeenCalledTimes(1)
+    expect(readStreamWithLimitMock).not.toHaveBeenCalled()
+    expect(sharpMock).not.toHaveBeenCalled()
+  })
+
+  it('passes through stream without buffering or destroying when Content-Length exceeds maxInputBytes in passthrough mode', async () => {
+    const options = resolveOptions({ maxInputBytes: 100, onLimitExceeded: 'passthrough' })
+    const stream = new PassThrough()
+    const destroySpy = vi.spyOn(stream, 'destroy')
+    const reply = createReply(101)
+    const request = createRequest()
+
+    const result = await processPayload(request as never, reply as never, stream, options)
+
+    expect(result).toBe(stream)
+    expect(destroySpy).not.toHaveBeenCalled()
+    expect(readStreamWithLimitMock).not.toHaveBeenCalled()
+    expect(sharpMock).not.toHaveBeenCalled()
+    expect(request.log.warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('handles Buffer exceeding maxInputBytes according to onLimitExceeded', async () => {
+    const buffer = Buffer.alloc(101)
+
+    const errorOptions = resolveOptions({ maxInputBytes: 100, onLimitExceeded: 'error' })
+    await expect(
+      processPayload(createRequest() as never, createReply() as never, buffer, errorOptions),
+    ).rejects.toBeInstanceOf(InputLimitExceededError)
+
+    const passthroughOptions = resolveOptions({ maxInputBytes: 100, onLimitExceeded: 'passthrough' })
+    const req = createRequest()
+    const result = await processPayload(req as never, createReply() as never, buffer, passthroughOptions)
+    expect(result).toBe(buffer)
+    expect(req.log.warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('passes through inputBuffer when sharp throws pixel limit error in passthrough mode', async () => {
+    const options = resolveOptions({
+      onLimitExceeded: 'passthrough',
+      sharpInputOptions: { limitInputPixels: 1 },
+    })
+    const inputBuffer = Buffer.from('raw-image')
+    sharpMock.mockReturnValueOnce({
+      metadata: vi.fn().mockRejectedValue(new Error('Input image exceeds pixel limit')),
+    })
+
+    const req = createRequest()
+    const result = await processPayload(req as never, createReply() as never, inputBuffer, options)
+
+    expect(result).toBe(inputBuffer)
+    expect(req.log.warn).toHaveBeenCalledTimes(1)
+    expect(req.log.error).not.toHaveBeenCalled()
+  })
+
+  it('ignores negative numeric Content-Length and falls back to stream buffering', async () => {
+    const options = resolveOptions({ maxInputBytes: 100, onLimitExceeded: 'passthrough' })
+    const stream = new PassThrough()
+    const reply = createReply(-1)
+    const request = createRequest()
+    readStreamWithLimitMock.mockRejectedValueOnce(new InputLimitExceededError('Stream exceeded limit'))
+
+    await expect(
+      processPayload(request as never, reply as never, stream, options),
+    ).rejects.toBeInstanceOf(InputLimitExceededError)
+    expect(readStreamWithLimitMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores non-numeric and unsafe-integer string Content-Length headers', async () => {
+    const options = resolveOptions({ maxInputBytes: 100, onLimitExceeded: 'error' })
+    for (const badHeader of ['invalid', '99999999999999999999']) {
+      const stream = new PassThrough()
+      readStreamWithLimitMock.mockRejectedValueOnce(new InputLimitExceededError('Stream exceeded limit'))
+      await expect(
+        processPayload(createRequest() as never, createReply(badHeader) as never, stream, options),
+      ).rejects.toBeInstanceOf(InputLimitExceededError)
+    }
+  })
+
+  it('throws InputLimitExceededError when Buffer Content-Length exceeds maxInputBytes in error mode', async () => {
+    const options = resolveOptions({ maxInputBytes: 100, onLimitExceeded: 'error' })
+    const buffer = Buffer.from('small')
+    await expect(
+      processPayload(createRequest() as never, createReply('101') as never, buffer, options),
+    ).rejects.toBeInstanceOf(InputLimitExceededError)
+  })
+
+  it('rethrows pixel limit error from sharp when onLimitExceeded is error', async () => {
+    const options = resolveOptions({
+      onLimitExceeded: 'error',
+      sharpInputOptions: { limitInputPixels: 1 },
+    })
+    const inputBuffer = Buffer.from('raw-image')
+    sharpMock.mockReturnValueOnce({
+      metadata: vi.fn().mockRejectedValue(new Error('Input image exceeds pixel limit')),
+    })
+
+    await expect(
+      processPayload(createRequest() as never, createReply() as never, inputBuffer, options),
+    ).rejects.toThrow('Input image exceeds pixel limit')
   })
 })
