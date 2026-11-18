@@ -140,6 +140,47 @@ export function parseBackground(value?: string): string | undefined {
   return undefined
 }
 
+function isTransparentHex(normalized: string): boolean {
+  if (normalized.length === 5) {
+    return normalized[4] !== 'f'
+  }
+  if (normalized.length === 9) {
+    return normalized.slice(7, 9) !== 'ff'
+  }
+  return false
+}
+
+function isTransparentFunctionalColor(normalized: string): boolean {
+  const openParen = normalized.indexOf('(')
+  const closeParen = normalized.lastIndexOf(')')
+  if (openParen === -1 || closeParen === -1) {
+    return false
+  }
+  const parts = normalized.slice(openParen + 1, closeParen).split(',')
+  return parts.length === 4 && !/^1(?:\.0+)?$/.test(parts[3].trim())
+}
+
+/**
+ * Returns `true` if a validated CSS background color string has an alpha channel < 1
+ * (e.g. `'transparent'`, `#0000`, `#00000000`, `rgba(..., 0)`, `hsla(..., 0.5)`).
+ */
+export function isTransparentBackground(background?: string): boolean {
+  if (!isNonEmptyString(background)) {
+    return false
+  }
+  const normalized = background.trim().toLowerCase()
+  if (normalized === 'transparent') {
+    return true
+  }
+  if (normalized.startsWith('#')) {
+    return isTransparentHex(normalized)
+  }
+  if (normalized.startsWith('rgb') || normalized.startsWith('hsl')) {
+    return isTransparentFunctionalColor(normalized)
+  }
+  return false
+}
+
 export function parseQuality(
   value: unknown,
   qualityMap: Record<string, number>,
