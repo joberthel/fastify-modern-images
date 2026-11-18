@@ -223,7 +223,6 @@ function sendEncodedReply(
 
   reply.header('Content-Type', format.contentType)
   reply.header('Content-Length', output.length)
-  reply.header('Vary', appendVaryHeader(reply.getHeader('Vary'), 'Accept'))
   if (derivedEtag !== undefined) {
     reply.header('ETag', derivedEtag)
   }
@@ -240,7 +239,6 @@ function sendEncodedReply(
 function sendNotModified(reply: FastifyReply, etag: string): string {
   reply.code(304)
   reply.header('ETag', etag)
-  reply.header('Vary', appendVaryHeader(reply.getHeader('Vary'), 'Accept'))
   reply.removeHeader('Content-Length')
   reply.removeHeader('accept-ranges')
   processedReplies.add(reply)
@@ -297,6 +295,8 @@ export async function processPayload(
   inFlight?: Map<string, Promise<CoalescedPipelineResult>>,
   rembgLimiter?: ConcurrencyLimiter,
 ): Promise<unknown> {
+  reply.header('Vary', appendVaryHeader(reply.getHeader('Vary'), 'Accept'))
+
   const compressionList: CompressionConfig[] = Object.values(options.compression)
   const accept = request.headers.accept ?? ''
   if (!compressionList.some(item => item.enabled && item.supported(accept))) {
@@ -460,6 +460,7 @@ export async function processPayload(
       throw err
     }
     request.log.error(err)
+    reply.header('Cache-Control', 'no-store')
     return inputBuffer
   }
 }

@@ -505,7 +505,9 @@ describe('pipeline - animated / multi-page image bypass', () => {
       },
     }
     const reply = {
-      getHeader: vi.fn().mockReturnValue('image/webp'),
+      getHeader: vi.fn((key: string) => (key.toLowerCase() === 'content-type'
+        ? 'image/webp'
+        : undefined)),
       header: vi.fn().mockReturnThis(),
       type: vi.fn().mockReturnThis(),
       code: vi.fn().mockReturnThis(),
@@ -515,7 +517,8 @@ describe('pipeline - animated / multi-page image bypass', () => {
 
     expect(result).toBe(inputBuffer)
     expect(toFormatSpy).not.toHaveBeenCalled()
-    expect(reply.header).not.toHaveBeenCalled()
+    expect(reply.header).toHaveBeenCalledTimes(1)
+    expect(reply.header).toHaveBeenCalledWith('Vary', 'Accept')
     expect(reply.type).not.toHaveBeenCalled()
     expect(reply.code).not.toHaveBeenCalled()
     expect(req.log.warn).not.toHaveBeenCalled()
@@ -703,5 +706,127 @@ describe('pipeline - coalesced request disconnect handling', () => {
     expect(leaderResult).toBe(inputBuffer)
     expect(followerResult).toBe(inputBuffer)
     expect(inFlight.size).toBe(0)
+  })
+})
+
+describe('pipeline - Vary and Cache-Control on fallback paths', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  function createFallbackReply(initialHeaders: Record<string, unknown> = {}) {
+    const headers = new Map<string, unknown>([
+      ['content-type', 'image/png'],
+      ...Object.entries(initialHeaders).map(([k, v]) => [
+        k.toLowerCase(),
+        v,
+      ] as const),
+    ])
+
+    return {
+      code: vi.fn().mockReturnThis(),
+      header: vi.fn((key: string, val: unknown) => {
+        headers.set(key.toLowerCase(), val)
+      }),
+      getHeader: vi.fn((key: string) => headers.get(key.toLowerCase())),
+      removeHeader: vi.fn((key: string) => {
+        headers.delete(key.toLowerCase())
+      }),
+      headers,
+    }
+  }
+
+  it('sets Vary: Accept on early no-format fallback without duplicating existing Accept', async () => {
+    const options = resolveOptions({
+      compression: {
+        jpeg: { enabled: false },
+        png: { enabled: false },
+      },
+    })
+    const payload = Buffer.from('raw-png')
+    const reply = createFallbackReply({ Vary: 'Origin' })
+    const req = {
+      headers: { accept: 'image/gif' },
+      query: {},
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+
+    const result = await processPayload(req as never, reply as never, payload, options)
+
+    expect(result).toBe(payload)
+    expect(reply.headers.get('vary')).toBe('Origin, Accept')
+    expect(reply.headers.get('cache-control')).toBeUndefined()
+    expect(sharpMock).not.toHaveBeenCalled()
+
+    const replyWithAccept = createFallbackReply({ Vary: 'Origin, accept' })
+    await processPayload(req as never, replyWithAccept as never, payload, options)
+    expect(replyWithAccept.headers.get('vary')).toBe('Origin, accept')
+  })
+
+  it('sets Vary: Accept on post-metadata no-format fallback', async () => {
+    const options = resolveOptions({
+      compression: {
+        avif: { enabled: false },
+        webp: { enabled: false },
+        jpeg: { enabled: true },
+        png: { enabled: false },
+      },
+    })
+    sharpMock.mockReturnValueOnce({
+      metadata: vi.fn().mockResolvedValue({ format: 'png', hasAlpha: true }),
+      trim: vi.fn().mockReturnThis(),
+      toFormat: vi.fn(),
+    })
+
+    const payload = Buffer.from('alpha-png')
+    const reply = createFallbackReply()
+    const req = {
+      headers: { accept: 'image/jpeg' },
+      query: {},
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+
+    const result = await processPayload(req as never, reply as never, payload, options)
+
+    expect(result).toBe(payload)
+    expect(reply.headers.get('vary')).toBe('Accept')
+    expect(reply.headers.get('cache-control')).toBeUndefined()
+    expect(req.log.warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('sets Vary: Accept and Cache-Control: no-store on error fallback', async () => {
+    const options = resolveOptions({})
+    sharpMock.mockReturnValueOnce({
+      metadata: vi.fn().mockRejectedValue(new Error('corrupt image')),
+      trim: vi.fn().mockReturnThis(),
+      toFormat: vi.fn(),
+    })
+
+    const payload = Buffer.from('corrupt-png')
+    const reply = createFallbackReply({ 'Cache-Control': 'public, max-age=31536000' })
+    const req = {
+      headers: { accept: 'image/webp' },
+      query: {},
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+
+    const result = await processPayload(req as never, reply as never, payload, options)
+
+    expect(result).toBe(payload)
+    expect(reply.headers.get('vary')).toBe('Accept')
+    expect(reply.headers.get('cache-control')).toBe('no-store')
+    expect(req.log.error).toHaveBeenCalledTimes(1)
   })
 })

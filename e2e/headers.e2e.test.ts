@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify'
+import { Buffer } from 'node:buffer'
 import path from 'node:path'
 import fastifyStatic from '@fastify/static'
 import fastify from 'fastify'
+import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import fastifyModernImages from '../src'
@@ -149,5 +151,138 @@ describe('response headers', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.headers['content-type']).toBe('image/jpeg')
+  })
+
+  it('sets Vary: Accept on early no-format fallback responses', async () => {
+    const noFallbackServer = fastify()
+    noFallbackServer.register(fastifyModernImages, {
+      compression: {
+        jpeg: { enabled: false },
+        png: { enabled: false },
+      },
+    })
+    noFallbackServer.register(fastifyStatic, {
+      root: path.join(__dirname, '../example/public'),
+      prefix: '/',
+    })
+    await noFallbackServer.ready()
+
+    const res = await noFallbackServer.inject({
+      method: 'GET',
+      url: '/test.jpg',
+      headers: {
+        accept: 'image/gif',
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['content-type']).toBe('image/jpeg')
+    expect(res.headers.vary).toBe('Accept')
+
+    await noFallbackServer.close()
+  })
+
+  it('sets Vary: Accept on post-metadata no-format fallback responses', async () => {
+    const noModernServer = fastify()
+    noModernServer.register(fastifyModernImages, {
+      compression: {
+        avif: { enabled: false },
+        webp: { enabled: false },
+        jpeg: { enabled: true },
+        png: { enabled: false },
+      },
+    })
+    noModernServer.register(fastifyStatic, {
+      root: path.join(__dirname, '../example/public'),
+      prefix: '/',
+    })
+    await noModernServer.ready()
+
+    const res = await noModernServer.inject({
+      method: 'GET',
+      url: '/test-alpha.png',
+      headers: {
+        accept: 'image/jpeg',
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['content-type']).toBe('image/png')
+    expect(res.headers.vary).toBe('Accept')
+
+    await noModernServer.close()
+  })
+
+  it('sets Vary: Accept on animated image bypass responses', async () => {
+    const frame1 = await sharp({
+      create: {
+        width: 4,
+        height: 4,
+        channels: 4,
+        background: { r: 255, g: 0, b: 0, alpha: 1 },
+      },
+    }).png().toBuffer()
+    const frame2 = await sharp({
+      create: {
+        width: 4,
+        height: 4,
+        channels: 4,
+        background: { r: 0, g: 0, b: 255, alpha: 1 },
+      },
+    }).png().toBuffer()
+    const animatedWebp = await sharp([frame1, frame2], {
+      join: { animated: true },
+    }).webp().toBuffer()
+
+    const animatedServer = fastify()
+    animatedServer.register(fastifyModernImages)
+    animatedServer.get('/animated.webp', (_request, reply) => {
+      reply.header('Vary', 'Origin')
+      return reply.type('image/webp').send(animatedWebp)
+    })
+    await animatedServer.ready()
+
+    const res = await animatedServer.inject({
+      method: 'GET',
+      url: '/animated.webp',
+      headers: {
+        accept: 'image/avif,image/webp,*/*',
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['content-type']).toBe('image/webp')
+    expect(res.headers.vary).toBe('Origin, Accept')
+    expect(res.rawPayload).toEqual(animatedWebp)
+
+    await animatedServer.close()
+  })
+
+  it('sets Vary: Accept and Cache-Control: no-store on error fallback responses', async () => {
+    const corruptPayload = Buffer.from('not-a-valid-jpeg')
+    const errorServer = fastify()
+    errorServer.register(fastifyModernImages)
+    errorServer.get('/corrupt.jpg', (_request, reply) => {
+      reply.header('Cache-Control', 'public, max-age=31536000')
+      reply.header('Vary', 'Origin')
+      return reply.type('image/jpeg').send(corruptPayload)
+    })
+    await errorServer.ready()
+
+    const res = await errorServer.inject({
+      method: 'GET',
+      url: '/corrupt.jpg',
+      headers: {
+        accept: 'image/webp',
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['content-type']).toBe('image/jpeg')
+    expect(res.headers.vary).toBe('Origin, Accept')
+    expect(res.headers['cache-control']).toBe('no-store')
+    expect(res.rawPayload).toEqual(corruptPayload)
+
+    await errorServer.close()
   })
 })
