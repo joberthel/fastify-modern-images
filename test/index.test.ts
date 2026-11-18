@@ -385,9 +385,12 @@ describe('fastifyModernImages unit tests - transforms and encoding', () => {
     const failReq = createRequest({
       raw: { url: '/fail.jpg' },
     })
-    const fallback = await onSend(failReq, createReply('image/jpeg'), Buffer.from('raw'))
+    const failReply = createReply('image/jpeg')
+    const fallback = await onSend(failReq, failReply, Buffer.from('raw'))
     expect(fallback).toEqual(Buffer.from('raw'))
     expect(failReq.log.error).toHaveBeenCalledTimes(1)
+    expect(failReply.header).toHaveBeenCalledWith('Vary', 'Accept')
+    expect(failReply.header).toHaveBeenCalledWith('Cache-Control', 'no-store')
 
     mockSharpInstance.toFormat.mockReturnValueOnce({
       toBuffer: vi.fn().mockResolvedValueOnce(Buffer.from('recovered')),
@@ -439,5 +442,49 @@ describe('fastifyModernImages unit tests - transforms and encoding', () => {
       background: undefined,
       withoutEnlargement: false,
     })
+  })
+
+  it('sets Vary: Accept on early no-format fallback but not when gated out', async () => {
+    const onSend = await registerPlugin({
+      regex: /^\/images\//,
+      compression: {
+        jpeg: { enabled: false },
+        png: { enabled: false },
+      },
+      verifyRequest: req => req.raw.url !== '/images/blocked.jpg',
+    })
+
+    const noFormatReply = createReply('image/jpeg')
+    const raw = Buffer.from('raw')
+    const noFormatRes = await onSend(
+      createRequest({
+        raw: { url: '/images/photo.jpg' },
+        headers: { accept: 'image/gif' },
+      }),
+      noFormatReply,
+      raw,
+    )
+    expect(noFormatRes).toBe(raw)
+    expect(noFormatReply.header).toHaveBeenCalledWith('Vary', 'Accept')
+
+    const nonMatchingUrlReply = createReply('image/jpeg')
+    await onSend(
+      createRequest({
+        raw: { url: '/other/photo.jpg' },
+      }),
+      nonMatchingUrlReply,
+      raw,
+    )
+    expect(nonMatchingUrlReply.header).not.toHaveBeenCalled()
+
+    const blockedReply = createReply('image/jpeg')
+    await onSend(
+      createRequest({
+        raw: { url: '/images/blocked.jpg' },
+      }),
+      blockedReply,
+      raw,
+    )
+    expect(blockedReply.header).not.toHaveBeenCalled()
   })
 })
