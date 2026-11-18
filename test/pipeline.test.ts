@@ -1,7 +1,7 @@
 import type { CoalescedPipelineResult } from '../src/pipeline'
 import { Buffer } from 'node:buffer'
 import { EventEmitter } from 'node:events'
-import { PassThrough } from 'node:stream'
+import { PassThrough, Readable } from 'node:stream'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveOptions } from '../src/config'
 import * as negotiation from '../src/negotiation'
@@ -832,5 +832,241 @@ describe('pipeline - Vary and Cache-Control on fallback paths', () => {
     expect(reply.headers.get('vary')).toBe('Accept')
     expect(reply.headers.get('cache-control')).toBe('no-store')
     expect(req.log.error).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('pipeline - post-transform ETag 304 on HEAD', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('returns 304 empty stream when post-metadata derivedEtag matches If-None-Match on HEAD', async () => {
+    const options = resolveOptions({
+      rembg: { enabled: true },
+      compression: {
+        avif: { enabled: false },
+        webp: { enabled: false },
+        jpeg: { enabled: true, priority: 10 },
+        png: { enabled: true, priority: 5 },
+      },
+    })
+    const inputBuffer = Buffer.from('alpha-png')
+    const encodedBuffer = Buffer.from('encoded-png')
+    removeBackgroundMock.mockResolvedValue(inputBuffer)
+
+    const mockSharpChain = () => ({
+      metadata: vi.fn().mockResolvedValue({
+        width: 10,
+        height: 10,
+        format: 'png',
+        hasAlpha: true,
+      }),
+      autoOrient: vi.fn().mockReturnThis(),
+      toFormat: vi.fn().mockReturnValue({
+        toBuffer: vi.fn().mockResolvedValue(encodedBuffer),
+      }),
+    })
+
+    sharpMock.mockReturnValueOnce(mockSharpChain())
+    const headers1 = new Map<string, unknown>([
+      ['content-type', 'image/png'],
+      ['etag', '"upstream-1"'],
+    ])
+    const reply1 = {
+      statusCode: 200,
+      code: vi.fn().mockReturnThis(),
+      header: vi.fn((k: string, v: unknown) => headers1.set(k.toLowerCase(), v)),
+      getHeader: vi.fn((k: string) => headers1.get(k.toLowerCase())),
+      removeHeader: vi.fn((k: string) => headers1.delete(k.toLowerCase())),
+    }
+    await processPayload(
+      {
+        headers: { accept: 'image/jpeg, image/png' },
+        query: { ai: 'u2net' },
+        log: {
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
+        },
+      } as never,
+      reply1 as never,
+      inputBuffer,
+      options,
+    )
+    const derivedEtag = headers1.get('etag') as string
+    expect(derivedEtag).toBeDefined()
+
+    sharpMock.mockReturnValueOnce(mockSharpChain())
+    const headers2 = new Map<string, unknown>([
+      ['content-type', 'image/png'],
+      ['etag', '"upstream-1"'],
+    ])
+    const reply2 = {
+      statusCode: 200,
+      code: vi.fn((status: number) => {
+        reply2.statusCode = status
+        return reply2
+      }),
+      header: vi.fn((k: string, v: unknown) => headers2.set(k.toLowerCase(), v)),
+      getHeader: vi.fn((k: string) => headers2.get(k.toLowerCase())),
+      removeHeader: vi.fn((k: string) => headers2.delete(k.toLowerCase())),
+    }
+    const result = await processPayload(
+      {
+        headers: {
+          'accept': 'image/jpeg, image/png',
+          'if-none-match': [derivedEtag],
+        },
+        query: { ai: 'u2net' },
+        log: {
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
+        },
+      } as never,
+      reply2 as never,
+      inputBuffer,
+      options,
+      undefined,
+      undefined,
+      true,
+    )
+
+    expect(reply2.code).toHaveBeenCalledWith(304)
+    expect(result).toBeInstanceOf(Readable)
+  })
+
+  it('strips body to empty Readable on HEAD for early no-format, bypass, post-metadata no-format, and error fallbacks', async () => {
+    const createHeadReply = (contentType = 'image/png') => {
+      const headers = new Map<string, unknown>([
+        ['content-type', contentType],
+      ])
+      return {
+        statusCode: 200,
+        code: vi.fn().mockReturnThis(),
+        header: vi.fn((k: string, v: unknown) => headers.set(k.toLowerCase(), v)),
+        getHeader: vi.fn((k: string) => headers.get(k.toLowerCase())),
+        removeHeader: vi.fn((k: string) => headers.delete(k.toLowerCase())),
+        headers,
+      }
+    }
+
+    // 1. Early no-format fallback
+    const noFormatOpts = resolveOptions({
+      compression: {
+        jpeg: { enabled: false },
+        png: { enabled: false },
+      },
+    })
+    const earlyReply = createHeadReply()
+    const earlyRes = await processPayload(
+      {
+        headers: { accept: 'image/gif' },
+        query: {},
+        log: {
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
+        },
+      } as never,
+      earlyReply as never,
+      Buffer.from('raw'),
+      noFormatOpts,
+      undefined,
+      undefined,
+      true,
+    )
+    expect(earlyRes).toBeInstanceOf(Readable)
+    expect(earlyReply.headers.get('content-length')).toBe(3)
+
+    // 2. Animated / multi-page bypass
+    const defaultOpts = resolveOptions({})
+    sharpMock.mockReturnValueOnce({
+      metadata: vi.fn().mockResolvedValue({
+        width: 10,
+        height: 10,
+        format: 'webp',
+        pages: 2,
+      }),
+    })
+    const bypassReply = createHeadReply('image/webp')
+    const bypassRes = await processPayload(
+      {
+        headers: { accept: 'image/webp' },
+        query: {},
+        log: {
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
+        },
+      } as never,
+      bypassReply as never,
+      Buffer.from('animated'),
+      defaultOpts,
+      undefined,
+      undefined,
+      true,
+    )
+    expect(bypassRes).toBeInstanceOf(Readable)
+    expect(bypassReply.headers.get('content-length')).toBe(8)
+
+    // 3. Post-metadata no-format fallback
+    const postNoFormatOpts = resolveOptions({
+      compression: {
+        avif: { enabled: false },
+        webp: { enabled: false },
+        jpeg: { enabled: true },
+        png: { enabled: false },
+      },
+    })
+    sharpMock.mockReturnValueOnce({
+      metadata: vi.fn().mockResolvedValue({ format: 'png', hasAlpha: true }),
+    })
+    const postReply = createHeadReply()
+    const postRes = await processPayload(
+      {
+        headers: { accept: 'image/jpeg' },
+        query: {},
+        log: {
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
+        },
+      } as never,
+      postReply as never,
+      Buffer.from('alpha'),
+      postNoFormatOpts,
+      undefined,
+      undefined,
+      true,
+    )
+    expect(postRes).toBeInstanceOf(Readable)
+    expect(postReply.headers.get('content-length')).toBe(5)
+
+    // 4. Error fallback
+    sharpMock.mockReturnValueOnce({
+      metadata: vi.fn().mockRejectedValue(new Error('corrupt')),
+    })
+    const errReply = createHeadReply()
+    const errRes = await processPayload(
+      {
+        headers: { accept: 'image/webp' },
+        query: {},
+        log: {
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
+        },
+      } as never,
+      errReply as never,
+      Buffer.from('bad'),
+      defaultOpts,
+      undefined,
+      undefined,
+      true,
+    )
+    expect(errRes).toBeInstanceOf(Readable)
+    expect(errReply.headers.get('cache-control')).toBe('no-store')
+    expect(errReply.headers.get('content-length')).toBe(3)
   })
 })

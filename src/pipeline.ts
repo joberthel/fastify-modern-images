@@ -4,6 +4,7 @@ import type { CompressionConfig, ImageTransformRequest, ResolvedFastifyModernIma
 import type { NormalizedTransformParams } from './validation'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
+import { Readable } from 'node:stream'
 import sharp from 'sharp'
 import { appendVaryHeader, computeDerivedEtag, getBestFormat, isStream, matchesIfNoneMatch } from './negotiation'
 import { removeBackground, validateRembgModel } from './providers/rembg'
@@ -207,6 +208,30 @@ async function coalesceTransformAndEncode(
   }
 }
 
+/**
+ * Converts a response payload into an empty Readable stream for HEAD requests,
+ * destroying any upstream stream and preserving Content-Length for buffered payloads.
+ */
+export function toHeadPayload(reply: FastifyReply, payload: unknown): unknown {
+  if (isStream(payload)) {
+    ;(payload as { destroy?: () => void }).destroy?.()
+    return Readable.from([])
+  }
+
+  if (Buffer.isBuffer(payload) || typeof payload === 'string') {
+    if (
+      reply.statusCode !== 204
+      && reply.statusCode !== 304
+      && reply.getHeader('content-length') === undefined
+    ) {
+      reply.header('Content-Length', Buffer.byteLength(payload))
+    }
+    return Readable.from([])
+  }
+
+  return payload
+}
+
 function sendEncodedReply(
   request: FastifyRequest<ImageTransformRequest>,
   reply: FastifyReply,
@@ -215,7 +240,8 @@ function sendEncodedReply(
   quality: number | undefined,
   inputLength: number,
   derivedEtag: string | undefined,
-): Buffer {
+  isHead: boolean,
+): Buffer | Readable {
   const inputType = String(reply.getHeader('Content-Type') ?? '')
   const reduction = inputLength > 0
     ? Math.round((1 - output.length / inputLength) * 100)
@@ -236,16 +262,20 @@ function sendEncodedReply(
 
   processedReplies.add(reply)
 
-  return output
+  return isHead
+    ? Readable.from([])
+    : output
 }
 
-function sendNotModified(reply: FastifyReply, etag: string): string {
+function sendNotModified(reply: FastifyReply, etag: string, isHead: boolean): string | Readable {
   reply.code(304)
   reply.header('ETag', etag)
   reply.removeHeader('Content-Length')
   reply.removeHeader('accept-ranges')
   processedReplies.add(reply)
-  return ''
+  return isHead
+    ? Readable.from([])
+    : ''
 }
 
 function findMatchingDerivedEtag(
@@ -297,6 +327,7 @@ export async function processPayload(
   options: ResolvedFastifyModernImagesOptions,
   inFlight?: Map<string, Promise<CoalescedPipelineResult>>,
   rembgLimiter?: ConcurrencyLimiter,
+  isHead: boolean = false,
 ): Promise<unknown> {
   reply.header('Vary', appendVaryHeader(reply.getHeader('Vary'), 'Accept'))
 
@@ -305,7 +336,9 @@ export async function processPayload(
   if (!compressionList.some(item => item.enabled && item.supported(accept))) {
     const inputType = String(reply.getHeader('Content-Type') ?? '')
     request.log.warn(`No adequate format for image of type "${inputType}" was found.`)
-    return payload
+    return isHead
+      ? toHeadPayload(reply, payload)
+      : payload
   }
 
   const params = normalizeTransformParams(request.query, options.maxDimension, options.allowedDimensions)
@@ -331,7 +364,7 @@ export async function processPayload(
     if (isStream(payload)) {
       ;(payload as { destroy?: () => void }).destroy?.()
     }
-    return sendNotModified(reply, earlyMatchedEtag)
+    return sendNotModified(reply, earlyMatchedEtag, isHead)
   }
 
   const inputBuffer = await readInputBuffer(payload, options.maxInputBytes)
@@ -442,21 +475,25 @@ export async function processPayload(
     }, inFlight, attachDisconnectListener)
 
     if (result.status === 'bypass') {
-      return inputBuffer
+      return isHead
+        ? toHeadPayload(reply, inputBuffer)
+        : inputBuffer
     }
 
     if (result.status === 'no-format') {
       const inputType = String(reply.getHeader('Content-Type') ?? '')
       request.log.warn(`No adequate format for image of type "${inputType}" was found.`)
-      return inputBuffer
+      return isHead
+        ? toHeadPayload(reply, inputBuffer)
+        : inputBuffer
     }
 
     const { output, format, quality, derivedEtag } = result
     if (derivedEtag !== undefined && matchesIfNoneMatch(request.headers['if-none-match'], derivedEtag)) {
-      return sendNotModified(reply, derivedEtag)
+      return sendNotModified(reply, derivedEtag, isHead)
     }
 
-    return sendEncodedReply(request, reply, output, format, quality, inputLength, derivedEtag)
+    return sendEncodedReply(request, reply, output, format, quality, inputLength, derivedEtag, isHead)
   }
   catch (err) {
     if (isFatalInputLimitError(err)) {
@@ -464,6 +501,8 @@ export async function processPayload(
     }
     request.log.error(err)
     reply.header('Cache-Control', 'no-store')
-    return inputBuffer
+    return isHead
+      ? toHeadPayload(reply, inputBuffer)
+      : inputBuffer
   }
 }
