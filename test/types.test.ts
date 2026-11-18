@@ -1,4 +1,11 @@
-import type { ImageTransformQuerystring, ImageTransformRequest, MinifyQuerystring, MinifyRequest } from '../src/types'
+import type {
+  FastifyModernImagesOptions,
+  ImageTransformQuerystring,
+  ImageTransformRequest,
+  MinifyQuerystring,
+  MinifyRequest,
+  QualityTier,
+} from '../src/types'
 import { describe, expect, it } from 'vitest'
 
 describe('imageTransformQuerystring types', () => {
@@ -18,5 +25,20 @@ describe('imageTransformQuerystring types', () => {
     const modernReq: ImageTransformRequest = req
 
     expect(modernReq.Querystring).toEqual({ width: '100' })
+  })
+
+  it('accepts valid QualityTier and ImageFormat compression options', () => {
+    const tier: QualityTier = '7'
+    const numericTier: QualityTier = 7
+    const opts: FastifyModernImagesOptions = {
+      quality: tier,
+      compression: {
+        avif: { enabled: false },
+        webp: { enabled: true },
+      },
+    }
+
+    expect(opts.quality).toBe('7')
+    expect(numericTier).toBe(7)
   })
 })

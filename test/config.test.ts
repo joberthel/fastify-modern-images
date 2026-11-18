@@ -13,6 +13,153 @@ describe('config - resolveOptions', () => {
     expect(fromRegex.urlPattern).toBe(legacyRegex)
     expect(fromRegex.regex).toBe(legacyRegex)
   })
+
+  it('accepts valid quality tiers and valid option overrides', () => {
+    for (const tier of ['1', '5', '9', 1, 5, 9] as const) {
+      expect(resolveOptions({ quality: tier }).quality).toBe(tier)
+    }
+
+    const resolved = resolveOptions({
+      maxDimension: 2048,
+      allowedDimensions: [320, 640],
+      maxInputBytes: 1024,
+      withoutEnlargement: false,
+      rembg: {
+        enabled: true,
+        model: 'u2net',
+        allowedModels: ['u2net'],
+        timeoutMs: 5000,
+        concurrency: 1,
+        endpoint: 'http://localhost:5000',
+      },
+      compression: {
+        avif: { enabled: false },
+        webp: {
+          format: 'webp',
+          enabled: true,
+          priority: 10,
+          alpha: true,
+          contentType: 'image/webp',
+          supported: () => true,
+          quality: { 7: 80 },
+        },
+        jpeg: undefined,
+      },
+      sharpInputOptions: { sequentialRead: true },
+      verifyRequest: () => true,
+    })
+
+    expect(resolved.maxDimension).toBe(2048)
+    expect(resolved.allowedDimensions).toEqual([320, 640])
+    expect(resolved.compression.avif.enabled).toBe(false)
+    expect(resolved.compression.webp.quality['7']).toBe(80)
+  })
+
+  it('throws a clear error for unknown compression formats', () => {
+    expect(() =>
+      resolveOptions({
+        compression: {
+          jpg: { enabled: false },
+        } as never,
+      }),
+    ).toThrow('Invalid compression format "jpg". Supported formats are: avif, webp, jpeg, png')
+  })
+
+  it('throws a clear error for invalid compression entries', () => {
+    expect(() => resolveOptions({ compression: 'invalid' as never })).toThrow('Invalid compression option')
+    expect(() => resolveOptions({
+      compression: { jpeg: 'invalid' as never },
+    })).toThrow('Invalid compression.jpeg option')
+    expect(() => resolveOptions({
+      compression: {
+        jpeg: { format: 'webp' },
+      },
+    })).toThrow('Invalid compression.jpeg.format option')
+    expect(() => resolveOptions({
+      compression: {
+        jpeg: { enabled: 'yes' as never },
+      },
+    })).toThrow('Invalid compression.jpeg.enabled option')
+    expect(() => resolveOptions({
+      compression: {
+        jpeg: { priority: Number.NaN },
+      },
+    })).toThrow('Invalid compression.jpeg.priority option')
+    expect(() => resolveOptions({
+      compression: {
+        jpeg: { alpha: 1 as never },
+      },
+    })).toThrow('Invalid compression.jpeg.alpha option')
+    expect(() => resolveOptions({
+      compression: {
+        jpeg: { contentType: '   ' },
+      },
+    })).toThrow('Invalid compression.jpeg.contentType option')
+    expect(() => resolveOptions({
+      compression: {
+        jpeg: { supported: true as never },
+      },
+    })).toThrow('Invalid compression.jpeg.supported option')
+    expect(() => resolveOptions({
+      compression: {
+        jpeg: { quality: 'bad' as never },
+      },
+    })).toThrow('Invalid compression.jpeg.quality option')
+    expect(() => resolveOptions({
+      compression: {
+        jpeg: {
+          quality: { 7: 101 },
+        },
+      },
+    })).toThrow('Invalid compression.jpeg.quality["7"] option')
+  })
+
+  it('throws a clear error for invalid quality values', () => {
+    for (const invalid of ['10', '0', '', 0, 10, 7.5, Number.NaN]) {
+      expect(() => resolveOptions({ quality: invalid as never })).toThrow(
+        `Invalid quality option "${String(invalid)}". Expected a quality tier from 1 to 9.`,
+      )
+    }
+  })
+
+  it('throws a clear error for invalid top-level and rembg options', () => {
+    expect(() => resolveOptions(null as never)).toThrow('Invalid plugin options')
+    expect(() => resolveOptions({ urlPattern: '/images/' as never })).toThrow('Invalid urlPattern option')
+    expect(() => resolveOptions({ regex: '/images/' as never })).toThrow('Invalid regex option')
+    expect(() => resolveOptions({ maxDimension: 0 })).toThrow('Invalid maxDimension option')
+    expect(() => resolveOptions({ maxDimension: 1.5 })).toThrow('Invalid maxDimension option')
+    expect(() => resolveOptions({
+      allowedDimensions: [100, 0],
+    })).toThrow('Invalid allowedDimensions option')
+    expect(() => resolveOptions({ allowedDimensions: '100' as never })).toThrow('Invalid allowedDimensions option')
+    expect(() => resolveOptions({ maxInputBytes: 0 })).toThrow('Invalid maxInputBytes option')
+    expect(() => resolveOptions({ maxInputBytes: Number.POSITIVE_INFINITY })).toThrow('Invalid maxInputBytes option')
+    expect(() => resolveOptions({ withoutEnlargement: 'true' as never })).toThrow('Invalid withoutEnlargement option')
+    expect(() => resolveOptions({ sharpInputOptions: 'bad' as never })).toThrow('Invalid sharpInputOptions option')
+    expect(() => resolveOptions({ verifyRequest: true as never })).toThrow('Invalid verifyRequest option')
+
+    expect(() => resolveOptions({ rembg: 'bad' as never })).toThrow('Invalid rembg option')
+    expect(() => resolveOptions({
+      rembg: { enabled: 1 as never },
+    })).toThrow('Invalid rembg.enabled option')
+    expect(() => resolveOptions({
+      rembg: { model: '' },
+    })).toThrow('Invalid rembg.model option')
+    expect(() => resolveOptions({
+      rembg: {
+        allowedModels: [''],
+      },
+    })).toThrow('Invalid rembg.allowedModels option')
+    expect(() => resolveOptions({
+      rembg: { timeoutMs: -1 },
+    })).toThrow('Invalid rembg.timeoutMs option')
+    expect(() => resolveOptions({
+      rembg: { concurrency: 1.5 },
+    })).toThrow('Invalid rembg.concurrency option')
+    expect(() => resolveOptions({
+      rembg: { endpoint: '' },
+    })).toThrow('Invalid rembg.endpoint option')
+  })
 })
 
 describe('config - deepMerge', () => {
