@@ -326,7 +326,16 @@ Optional allowlist of permitted `width` and `height` pixel values (for example, 
 Type: `number`\
 Default: `52428800` *(50 MiB)*
 
-Maximum allowed byte size when buffering incoming streams, reading input buffers, or reading `rembg` output. Exceeding this limit aborts the stream and returns an HTTP `500` error.
+Maximum allowed byte size when buffering incoming streams, reading input buffers, or reading `rembg` output. Behavior when exceeded is controlled by `onLimitExceeded`.
+
+##### onLimitExceeded
+
+Type: `'passthrough' | 'error'`\
+Default: `'error'`
+
+Controls how input limit violations (`maxInputBytes` or `sharpInputOptions.limitInputPixels`) are handled:
+- `'error'`: Abort processing and throw an `InputLimitExceededError` (HTTP `500`).
+- `'passthrough'`: Log a warning and serve the original payload unmodified when possible (e.g., when `Content-Length` is known, for `Buffer` payloads, or when `limitInputPixels` is exceeded).
 
 ##### withoutEnlargement
 

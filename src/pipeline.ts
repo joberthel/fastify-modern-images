@@ -72,6 +72,25 @@ function applySharpTransforms(
   }
 }
 
+function parseContentLength(header: unknown): number | undefined {
+  if (typeof header === 'number') {
+    if (Number.isFinite(header) && header >= 0) {
+      return header
+    }
+    return undefined
+  }
+  if (typeof header === 'string') {
+    const trimmed = header.trim()
+    if (/^\d+$/.test(trimmed)) {
+      const parsed = Number(trimmed)
+      if (Number.isSafeInteger(parsed)) {
+        return parsed
+      }
+    }
+  }
+  return undefined
+}
+
 async function readInputBuffer(
   payload: unknown,
   maxInputBytes: number,
@@ -82,7 +101,7 @@ async function readInputBuffer(
 
   const inputBuffer = payload as Buffer
   if (Buffer.isBuffer(inputBuffer) && inputBuffer.length > maxInputBytes) {
-    throw new Error(`Input buffer exceeded maximum allowed size of ${maxInputBytes} bytes`)
+    throw new InputLimitExceededError(`Input buffer exceeded maximum allowed size of ${maxInputBytes} bytes`)
   }
   return inputBuffer
 }
@@ -334,6 +353,29 @@ export async function processPayload(
     return sendNotModified(reply, earlyMatchedEtag)
   }
 
+  const contentLength = parseContentLength(reply.getHeader('content-length'))
+  if (contentLength !== undefined && contentLength > options.maxInputBytes) {
+    if (options.onLimitExceeded === 'passthrough') {
+      request.log.warn(
+        `Input payload Content-Length (${contentLength} bytes) exceeds maxInputBytes (${options.maxInputBytes}); passing through original payload.`,
+      )
+      return payload
+    }
+    if (isStream(payload)) {
+      ;(payload as { destroy?: () => void }).destroy?.()
+    }
+    throw new InputLimitExceededError(
+      `Input payload exceeded maximum allowed size of ${options.maxInputBytes} bytes`,
+    )
+  }
+
+  if (Buffer.isBuffer(payload) && payload.length > options.maxInputBytes && options.onLimitExceeded === 'passthrough') {
+    request.log.warn(
+      `Input buffer (${payload.length} bytes) exceeds maxInputBytes (${options.maxInputBytes}); passing through original payload.`,
+    )
+    return payload
+  }
+
   const inputBuffer = await readInputBuffer(payload, options.maxInputBytes)
   const inputLength = inputBuffer.length
 
@@ -402,18 +444,6 @@ export async function processPayload(
       }
 
       const metadata = await instance.metadata()
-      const pixelLimit = options.sharpInputOptions?.limitInputPixels
-      if (
-        typeof pixelLimit === 'number'
-        && pixelLimit > 0
-        && metadata.width !== undefined
-        && metadata.height !== undefined
-        && metadata.width * metadata.height > pixelLimit
-      ) {
-        throw new InputLimitExceededError(
-          `Input image exceeds pixel limit (${metadata.width * metadata.height} > ${pixelLimit})`,
-        )
-      }
       if (metadata.pages !== undefined && metadata.pages > 1) {
         return { status: 'bypass' }
       }
@@ -460,6 +490,10 @@ export async function processPayload(
   }
   catch (err) {
     if (isFatalInputLimitError(err)) {
+      if (options.onLimitExceeded === 'passthrough') {
+        request.log.warn(err)
+        return inputBuffer
+      }
       throw err
     }
     request.log.error(err)

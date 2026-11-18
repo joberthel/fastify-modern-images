@@ -14,6 +14,7 @@ export const defaults: ResolvedFastifyModernImagesOptions = {
   quality: '7',
   maxDimension: MAX_DIMENSION,
   maxInputBytes: DEFAULT_MAX_INPUT_BYTES,
+  onLimitExceeded: 'error',
   withoutEnlargement: true,
   rembg: {
     enabled: false,
