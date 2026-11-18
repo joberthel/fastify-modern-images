@@ -7,6 +7,7 @@ import * as rembg from '../src/providers/rembg'
 const mockSharpInstance = {
   trim: vi.fn().mockReturnThis(),
   metadata: vi.fn(),
+  autoOrient: vi.fn().mockReturnThis(),
   rotate: vi.fn().mockReturnThis(),
   resize: vi.fn().mockReturnThis(),
   flatten: vi.fn().mockReturnThis(),
@@ -222,6 +223,7 @@ describe('fastifyModernImages unit tests - transforms and encoding', () => {
     const result = await onSend(req, reply, Buffer.from('0123456789abcdef'))
     expect(result).toEqual(Buffer.from('encoded'))
     expect(mockSharpInstance.trim).toHaveBeenCalledTimes(1)
+    expect(mockSharpInstance.autoOrient).toHaveBeenCalledTimes(1)
     expect(mockSharpInstance.rotate).toHaveBeenCalledWith(90, { background: 'red' })
     expect(mockSharpInstance.resize).toHaveBeenCalledWith(100, 200, {
       fit: 'contain',
@@ -238,10 +240,11 @@ describe('fastifyModernImages unit tests - transforms and encoding', () => {
     expect(req.log.info).toHaveBeenCalledTimes(1)
   })
 
-  it('skips resize and flatten when dimensions and background are absent', async () => {
+  it('skips rotate, resize, and flatten when rotation, dimensions, and background are absent', async () => {
     const onSend = await registerPlugin()
     await onSend(createRequest(), createReply(), Buffer.from('raw'))
-    expect(mockSharpInstance.rotate).toHaveBeenCalledWith(undefined, { background: undefined })
+    expect(mockSharpInstance.autoOrient).toHaveBeenCalledTimes(1)
+    expect(mockSharpInstance.rotate).not.toHaveBeenCalled()
     expect(mockSharpInstance.resize).not.toHaveBeenCalled()
     expect(mockSharpInstance.flatten).not.toHaveBeenCalled()
   })
