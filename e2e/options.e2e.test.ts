@@ -46,8 +46,8 @@ describe('plugin options', () => {
       }
       return payload
     })
-    multiServer.register(fastifyModernImages, { quality: 80 })
-    multiServer.register(fastifyModernImages, { quality: 10 })
+    multiServer.register(fastifyModernImages, { quality: 8 })
+    multiServer.register(fastifyModernImages, { quality: 1 })
     multiServer.register(fastifyStatic, {
       root: path.join(__dirname, '../example/public'),
       prefix: '/',
@@ -55,7 +55,7 @@ describe('plugin options', () => {
     await multiServer.ready()
 
     const singleServer = fastify()
-    singleServer.register(fastifyModernImages, { quality: 80 })
+    singleServer.register(fastifyModernImages, { quality: 8 })
     singleServer.register(fastifyStatic, {
       root: path.join(__dirname, '../example/public'),
       prefix: '/',
@@ -155,5 +155,27 @@ describe('plugin options', () => {
     finally {
       await limitedServer.close()
     }
+  })
+
+  it('rejects registration with invalid compression format or quality option', async () => {
+    const badCompressionServer = fastify()
+    badCompressionServer.register(fastifyModernImages, {
+      compression: {
+        jpg: { enabled: false },
+      } as never,
+    })
+    await expect(badCompressionServer.ready()).rejects.toThrow(
+      'Invalid compression format "jpg". Supported formats are: avif, webp, jpeg, png',
+    )
+    await badCompressionServer.close()
+
+    const badQualityServer = fastify()
+    badQualityServer.register(fastifyModernImages, {
+      quality: '10' as never,
+    })
+    await expect(badQualityServer.ready()).rejects.toThrow(
+      'Invalid quality option "10". Expected a quality tier from 1 to 9.',
+    )
+    await badQualityServer.close()
   })
 })

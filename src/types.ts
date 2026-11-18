@@ -76,6 +76,9 @@ export type MinifyRequest = ImageTransformRequest
 /** Supported output image formats. */
 export type ImageFormat = 'avif' | 'webp' | 'jpeg' | 'png'
 
+/** Valid quality tier values from `'1'` (worst) to `'9'` (best). */
+export type QualityTier = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+
 /** Configuration for a single output image format. */
 export interface CompressionConfig {
   /** Whether this output format is enabled. */
@@ -120,13 +123,13 @@ export interface ResolvedFastifyModernImagesOptions {
   urlPattern: RegExp
   /** Backwards-compatible alias for `urlPattern`. */
   regex: RegExp
-  quality: string | number
+  quality: QualityTier
   maxDimension: number
   allowedDimensions?: number[]
   maxInputBytes: number
   withoutEnlargement: boolean
   rembg: RembgOptions
-  compression: Record<string, CompressionConfig>
+  compression: Record<ImageFormat, CompressionConfig>
   sharpInputOptions?: sharp.SharpOptions
   verifyRequest?: (request: FastifyRequest<ImageTransformRequest>) => boolean | Promise<boolean>
 }
@@ -150,7 +153,7 @@ export interface FastifyModernImagesOptions {
    * Default quality level from `'1'` (worst) to `'9'` (best).
    * @default '7'
    */
-  quality?: string | number
+  quality?: QualityTier
   /**
    * Maximum allowed width/height in pixels for resize query parameters.
    * @default 4096
@@ -174,7 +177,7 @@ export interface FastifyModernImagesOptions {
   /** AI background removal (`rembg`) configuration. */
   rembg?: Partial<RembgOptions>
   /** Per-format compression configuration overrides keyed by format name. */
-  compression?: Record<string, FastifyModernImagesOptionsCompression>
+  compression?: Partial<Record<ImageFormat, FastifyModernImagesOptionsCompression>>
   /**
    * Options passed to the `sharp(buffer, options)` constructor (e.g. `limitInputPixels`, `failOn`, `sequentialRead`).
    * @default {}

@@ -1,4 +1,8 @@
-import type { FastifyModernImagesOptions, ResolvedFastifyModernImagesOptions } from './types'
+import type {
+  FastifyModernImagesOptions,
+  ImageFormat,
+  ResolvedFastifyModernImagesOptions,
+} from './types'
 import { isMediaTypeAccepted } from './negotiation'
 import { MAX_DIMENSION } from './validation'
 
@@ -156,7 +160,176 @@ export function deepMerge<T extends object>(
   return result as T
 }
 
+const VALID_IMAGE_FORMATS = new Set<ImageFormat>(['avif', 'webp', 'jpeg', 'png'])
+
+const VALID_QUALITY_TIERS = new Set<unknown>([
+  '1',
+  '2',
+  '3',
+  '4',
+  '5',
+  '6',
+  '7',
+  '8',
+  '9',
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+])
+
+function assertPositiveInteger(value: unknown, name: string): void {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+    throw new Error(`Invalid ${name} option: expected a positive integer`)
+  }
+}
+
+function assertPositiveFiniteNumber(value: unknown, name: string): void {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    throw new Error(`Invalid ${name} option: expected a positive finite number`)
+  }
+}
+
+function assertBoolean(value: unknown, name: string): void {
+  if (typeof value !== 'boolean') {
+    throw new TypeError(`Invalid ${name} option: expected a boolean`)
+  }
+}
+
+function assertNonEmptyString(value: unknown, name: string): void {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(`Invalid ${name} option: expected a non-empty string`)
+  }
+}
+
+function validateCompressionQuality(quality: unknown, format: string): void {
+  if (!isPlainObject(quality)) {
+    throw new Error(`Invalid compression.${format}.quality option: expected an object`)
+  }
+  for (const [tier, value] of Object.entries(quality)) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 1 || value > 100) {
+      throw new Error(`Invalid compression.${format}.quality["${tier}"] option: expected a number between 1 and 100`)
+    }
+  }
+}
+
+function validateCompressionEntry(format: string, config: unknown): void {
+  if (!VALID_IMAGE_FORMATS.has(format as ImageFormat)) {
+    throw new Error(`Invalid compression format "${format}". Supported formats are: avif, webp, jpeg, png`)
+  }
+  if (config === undefined) {
+    return
+  }
+  if (!isPlainObject(config)) {
+    throw new Error(`Invalid compression.${format} option: expected an object`)
+  }
+  if (config.format !== undefined && config.format !== format) {
+    throw new Error(`Invalid compression.${format}.format option: expected "${format}"`)
+  }
+  if (config.enabled !== undefined) {
+    assertBoolean(config.enabled, `compression.${format}.enabled`)
+  }
+  if (config.priority !== undefined && (typeof config.priority !== 'number' || !Number.isFinite(config.priority))) {
+    throw new Error(`Invalid compression.${format}.priority option: expected a finite number`)
+  }
+  if (config.alpha !== undefined) {
+    assertBoolean(config.alpha, `compression.${format}.alpha`)
+  }
+  if (config.contentType !== undefined) {
+    assertNonEmptyString(config.contentType, `compression.${format}.contentType`)
+  }
+  if (config.supported !== undefined && typeof config.supported !== 'function') {
+    throw new Error(`Invalid compression.${format}.supported option: expected a function`)
+  }
+  if (config.quality !== undefined) {
+    validateCompressionQuality(config.quality, format)
+  }
+}
+
+function validateCompression(compression: unknown): void {
+  if (!isPlainObject(compression)) {
+    throw new Error('Invalid compression option: expected an object')
+  }
+  for (const [format, config] of Object.entries(compression)) {
+    validateCompressionEntry(format, config)
+  }
+}
+
+function validateRembg(rembg: unknown): void {
+  if (!isPlainObject(rembg)) {
+    throw new Error('Invalid rembg option: expected an object')
+  }
+  if (rembg.enabled !== undefined) {
+    assertBoolean(rembg.enabled, 'rembg.enabled')
+  }
+  if (rembg.model !== undefined) {
+    assertNonEmptyString(rembg.model, 'rembg.model')
+  }
+  if (rembg.allowedModels !== undefined) {
+    if (!Array.isArray(rembg.allowedModels) || rembg.allowedModels.some(m => typeof m !== 'string' || m.length === 0)) {
+      throw new Error('Invalid rembg.allowedModels option: expected an array of non-empty strings')
+    }
+  }
+  if (rembg.timeoutMs !== undefined) {
+    assertPositiveFiniteNumber(rembg.timeoutMs, 'rembg.timeoutMs')
+  }
+  if (rembg.concurrency !== undefined) {
+    assertPositiveInteger(rembg.concurrency, 'rembg.concurrency')
+  }
+  if (rembg.endpoint !== undefined) {
+    assertNonEmptyString(rembg.endpoint, 'rembg.endpoint')
+  }
+}
+
+function validateOptions(opts: FastifyModernImagesOptions): void {
+  if (!isPlainObject(opts)) {
+    throw new Error('Invalid plugin options: expected an object')
+  }
+  if (opts.urlPattern !== undefined && !(opts.urlPattern instanceof RegExp)) {
+    throw new Error('Invalid urlPattern option: expected a RegExp instance')
+  }
+  if (opts.regex !== undefined && !(opts.regex instanceof RegExp)) {
+    throw new Error('Invalid regex option: expected a RegExp instance')
+  }
+  if (opts.quality !== undefined && !VALID_QUALITY_TIERS.has(opts.quality)) {
+    throw new Error(`Invalid quality option "${String(opts.quality)}". Expected a quality tier from 1 to 9.`)
+  }
+  if (opts.maxDimension !== undefined) {
+    assertPositiveInteger(opts.maxDimension, 'maxDimension')
+  }
+  if (
+    opts.allowedDimensions !== undefined
+    && (!Array.isArray(opts.allowedDimensions) || opts.allowedDimensions.some(d => typeof d !== 'number' || !Number.isInteger(d) || d <= 0))
+  ) {
+    throw new Error('Invalid allowedDimensions option: expected an array of positive integers')
+  }
+  if (opts.maxInputBytes !== undefined) {
+    assertPositiveFiniteNumber(opts.maxInputBytes, 'maxInputBytes')
+  }
+  if (opts.withoutEnlargement !== undefined && typeof opts.withoutEnlargement !== 'boolean') {
+    throw new Error('Invalid withoutEnlargement option: expected a boolean')
+  }
+  if (opts.rembg !== undefined) {
+    validateRembg(opts.rembg)
+  }
+  if (opts.compression !== undefined) {
+    validateCompression(opts.compression)
+  }
+  if (opts.sharpInputOptions !== undefined && !isPlainObject(opts.sharpInputOptions)) {
+    throw new Error('Invalid sharpInputOptions option: expected an object')
+  }
+  if (opts.verifyRequest !== undefined && typeof opts.verifyRequest !== 'function') {
+    throw new Error('Invalid verifyRequest option: expected a function')
+  }
+}
+
 export function resolveOptions(opts: FastifyModernImagesOptions): ResolvedFastifyModernImagesOptions {
+  validateOptions(opts)
   const resolved = deepMerge(defaults, opts)
   if (opts.urlPattern !== undefined) {
     resolved.regex = opts.urlPattern
