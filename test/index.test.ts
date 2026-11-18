@@ -249,6 +249,59 @@ describe('fastifyModernImages unit tests - transforms and encoding', () => {
     expect(mockSharpInstance.flatten).not.toHaveBeenCalled()
   })
 
+  it('skips flatten and preserves alpha format negotiation for transparent background colors', async () => {
+    const onSend = await registerPlugin()
+    const transparentColors = [
+      'transparent',
+      '#0000',
+      '#00000000',
+      'rgba(0, 0, 0, 0)',
+      'hsla(0, 0%, 0%, 0.5)',
+    ]
+
+    for (const background of transparentColors) {
+      vi.clearAllMocks()
+      mockSharpInstance.metadata.mockResolvedValue({ format: 'png', hasAlpha: true })
+      mockSharpInstance.toFormat.mockReturnValue({
+        toBuffer: vi.fn().mockResolvedValue(Buffer.from('encoded')),
+      })
+
+      const req = createRequest({
+        headers: { accept: 'image/png' },
+        query: {
+          width: '100',
+          height: '100',
+          fit: 'contain',
+          rotation: '45',
+          background,
+        },
+      })
+      const reply = createReply('image/png')
+
+      const result = await onSend(req, reply, Buffer.from('raw'))
+      expect(result).toEqual(Buffer.from('encoded'))
+      expect(mockSharpInstance.rotate).toHaveBeenCalledWith(45, { background })
+      expect(mockSharpInstance.resize).toHaveBeenCalledWith(100, 100, {
+        fit: 'contain',
+        position: 'centre',
+        background,
+        withoutEnlargement: true,
+      })
+      expect(mockSharpInstance.flatten).not.toHaveBeenCalled()
+
+      // When only JPEG is accepted, an alpha PNG with a transparent background must not be flattened to JPEG.
+      mockSharpInstance.toFormat.mockClear()
+      const jpegReq = createRequest({
+        headers: { accept: 'image/jpeg' },
+        query: { background },
+      })
+      const jpegResult = await onSend(jpegReq, createReply('image/png'), Buffer.from('raw-png'))
+      expect(jpegResult).toEqual(Buffer.from('encoded'))
+      expect(mockSharpInstance.toFormat).toHaveBeenCalledWith('png', expect.any(Object))
+      expect(mockSharpInstance.flatten).not.toHaveBeenCalled()
+    }
+  })
+
   it('logs warning and returns buffer when no adequate format is found', async () => {
     const onSend = await registerPlugin({
       compression: {

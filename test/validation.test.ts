@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   guard,
   isNonEmptyString,
+  isTransparentBackground,
   matchesUrlPattern,
   MAX_DIMENSION,
   normalizeTransformParams,
@@ -242,6 +243,43 @@ describe('validation helpers', () => {
         width: 500,
         height: null,
       })
+    })
+  })
+
+  describe('isTransparentBackground', () => {
+    it('returns true for transparent keyword and alpha < 1 hex or functional colors', () => {
+      expect(isTransparentBackground('transparent')).toBe(true)
+      expect(isTransparentBackground('TRANSPARENT')).toBe(true)
+      expect(isTransparentBackground(' transparent ')).toBe(true)
+      expect(isTransparentBackground('#0000')).toBe(true)
+      expect(isTransparentBackground('#ff000080')).toBe(true)
+      expect(isTransparentBackground('#00000000')).toBe(true)
+      expect(isTransparentBackground('rgba(0, 0, 0, 0)')).toBe(true)
+      expect(isTransparentBackground('rgba(255, 0, 0, 0.5)')).toBe(true)
+      expect(isTransparentBackground('rgba(255, 0, 0, .5)')).toBe(true)
+      expect(isTransparentBackground('rgb(0, 0, 0, 0)')).toBe(true)
+      expect(isTransparentBackground('hsla(120, 100%, 50%, 0)')).toBe(true)
+      expect(isTransparentBackground('hsla(120, 100%, 50%, 0.25)')).toBe(true)
+      expect(isTransparentBackground('hsl(120, 100%, 50%, 0)')).toBe(true)
+    })
+
+    it('returns false for undefined, empty, and opaque colors', () => {
+      expect(isTransparentBackground(undefined)).toBe(false)
+      expect(isTransparentBackground('')).toBe(false)
+      expect(isTransparentBackground('red')).toBe(false)
+      expect(isTransparentBackground('white')).toBe(false)
+      expect(isTransparentBackground('#fff')).toBe(false)
+      expect(isTransparentBackground('#ff0000')).toBe(false)
+      expect(isTransparentBackground('#ffff')).toBe(false)
+      expect(isTransparentBackground('#ffffffff')).toBe(false)
+      expect(isTransparentBackground('rgb(255, 0, 0)')).toBe(false)
+      expect(isTransparentBackground('rgba(255, 0, 0, 1)')).toBe(false)
+      expect(isTransparentBackground('rgba(255, 0, 0, 1.0)')).toBe(false)
+      expect(isTransparentBackground('hsl(120, 100%, 50%)')).toBe(false)
+      expect(isTransparentBackground('hsla(120, 100%, 50%, 1)')).toBe(false)
+      expect(isTransparentBackground('hsla(120, 100%, 50%, 1.0)')).toBe(false)
+      expect(isTransparentBackground('rgb')).toBe(false)
+      expect(isTransparentBackground('rgba(255, 0, 0')).toBe(false)
     })
   })
 })

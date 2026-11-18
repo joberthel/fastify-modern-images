@@ -33,7 +33,10 @@ export interface ImageTransformQuerystring {
     | 'centre'
     | 'entropy'
     | 'attention'
-  /** Background colour used when `fit` is `'contain'` or when rotating. */
+  /**
+   * Background colour used when `fit` is `'contain'` or when rotating, and to
+   * flatten the image when the colour is opaque (non-transparent).
+   */
   background?: string
   /** Rotation angle in degrees. */
   rotation?: string

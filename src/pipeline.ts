@@ -8,7 +8,7 @@ import sharp from 'sharp'
 import { appendVaryHeader, computeDerivedEtag, getBestFormat, isStream, matchesIfNoneMatch } from './negotiation'
 import { removeBackground, validateRembgModel } from './providers/rembg'
 import { readStreamWithLimit } from './stream'
-import { isNonEmptyString, normalizeTransformParams, parseQuality } from './validation'
+import { isNonEmptyString, isTransparentBackground, normalizeTransformParams, parseQuality } from './validation'
 
 export const processedReplies = new WeakSet<FastifyReply>()
 
@@ -54,6 +54,10 @@ function applyResize(
   })
 }
 
+function shouldFlattenBackground(background?: string): boolean {
+  return isNonEmptyString(background) && !isTransparentBackground(background)
+}
+
 function applySharpTransforms(
   instance: sharp.Sharp,
   params: NormalizedTransformParams,
@@ -67,7 +71,7 @@ function applySharpTransforms(
   }
   applyResize(instance, params, options)
 
-  if (isNonEmptyString(params.background)) {
+  if (shouldFlattenBackground(params.background)) {
     instance.flatten({ background: params.background })
   }
 }
@@ -417,7 +421,7 @@ export async function processPayload(
       if (metadata.pages !== undefined && metadata.pages > 1) {
         return { status: 'bypass' }
       }
-      const flattened = isNonEmptyString(params.background)
+      const flattened = shouldFlattenBackground(params.background)
       const format = getBestFormat(accept, metadata, compressionList, flattened)
 
       if (format === undefined) {

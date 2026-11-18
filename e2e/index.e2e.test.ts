@@ -436,3 +436,61 @@ describe('issue #36: flatten, q=0, and early format check', () => {
     await server.close()
   })
 })
+
+describe('issue #87: transparent background colors preserve alpha', () => {
+  it('preserves alpha and does not flatten to black for background=transparent and alpha < 1 colors', async () => {
+    const server = fastify()
+    server.register(fastifyModernImages)
+    server.register(fastifyStatic, {
+      root: path.join(__dirname, '../example/public'),
+      prefix: '/',
+    })
+
+    const transparentColors = [
+      'transparent',
+      '%2300000000',
+      'rgba(0,0,0,0)',
+      'hsla(0,0%,0%,0)',
+      'rgba(255,0,0,0.5)',
+    ]
+
+    for (const bg of transparentColors) {
+      const res = await server.inject({
+        method: 'GET',
+        url: `/test-alpha.png?width=200&height=100&fit=contain&background=${bg}`,
+        headers: { accept: 'image/png' },
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(res.headers['content-type']).toBe('image/png')
+      const meta = await sharp(res.rawPayload).metadata()
+      expect(meta.hasAlpha).toBe(true)
+
+      // Top-left pixel (0, 0) in letterboxed contain padding should retain alpha < 255, not opaque black.
+      const { data } = await sharp(res.rawPayload).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+      expect(data[3]).toBeLessThan(255)
+    }
+
+    await server.close()
+  })
+
+  it('does not negotiate an alpha PNG to JPEG when background is transparent', async () => {
+    const server = fastify()
+    server.register(fastifyModernImages)
+    server.register(fastifyStatic, {
+      root: path.join(__dirname, '../example/public'),
+      prefix: '/',
+    })
+
+    const res = await server.inject({
+      method: 'GET',
+      url: '/test-alpha.png?background=transparent',
+      headers: { accept: 'image/jpeg' },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['content-type']).toBe('image/png')
+
+    await server.close()
+  })
+})
