@@ -180,6 +180,37 @@ describe('negotiation - getBestFormat', () => {
     const clampedQ = getBestFormat('image/webp;q=1.5, image/avif;q=1.0', { hasAlpha: false }, formats)
     expect(clampedQ?.format).toBe('avif')
   })
+
+  it('should not convert jpeg to png when Accept prefers image/png over image/*', () => {
+    const legacyWebKitAccept = 'image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5'
+    const realisticFormats = createFormats().map(f => ({
+      ...f,
+      supported: (f.format === 'avif' || f.format === 'webp')
+        ? (accept: string) => isMediaTypeAccepted(accept, f.contentType)
+        : f.supported,
+    }))
+
+    const withAvif = realisticFormats.map(f => (f.format === 'avif'
+      ? { ...f, enabled: true }
+      : f))
+    expect(getBestFormat(legacyWebKitAccept, { format: 'jpeg', hasAlpha: false }, withAvif)?.format).toBe('avif')
+
+    expect(getBestFormat(legacyWebKitAccept, { format: 'jpeg', hasAlpha: false }, realisticFormats)?.format).toBe('webp')
+
+    const jpegAndPngOnly = realisticFormats.map(f => (f.format === 'webp'
+      ? { ...f, enabled: false }
+      : f))
+    expect(getBestFormat(legacyWebKitAccept, { format: 'jpeg', hasAlpha: false }, jpegAndPngOnly)?.format).toBe('jpeg')
+
+    expect(getBestFormat('image/png, image/webp;q=0.8', { format: 'jpeg', hasAlpha: false }, realisticFormats)?.format).toBe('webp')
+  })
+
+  it('should allow png for jpeg only when no other enabled and accepted format is available', () => {
+    const formats = createFormats()
+
+    expect(getBestFormat('image/png', { format: 'jpeg', hasAlpha: false }, formats)?.format).toBe('png')
+    expect(getBestFormat('image/jpeg;q=0, image/png', { format: 'jpeg', hasAlpha: false }, formats)?.format).toBe('png')
+  })
 })
 
 describe('negotiation - isMediaTypeAccepted', () => {
