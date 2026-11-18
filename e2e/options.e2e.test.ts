@@ -162,7 +162,7 @@ describe('plugin options', () => {
     badCompressionServer.register(fastifyModernImages, {
       compression: {
         jpg: { enabled: false },
-      } as never,
+      },
     })
     await expect(badCompressionServer.ready()).rejects.toThrow(
       'Invalid compression format "jpg". Supported formats are: avif, webp, jpeg, png',
@@ -171,7 +171,7 @@ describe('plugin options', () => {
 
     const badQualityServer = fastify()
     badQualityServer.register(fastifyModernImages, {
-      quality: '10' as never,
+      quality: '10',
     })
     await expect(badQualityServer.ready()).rejects.toThrow(
       'Invalid quality option "10". Expected a quality tier from 1 to 9.',
