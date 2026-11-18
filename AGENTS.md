@@ -36,3 +36,7 @@ Every GitHub issue should have both its **Issue Type** (`Bug`, `Task`, `Feature`
    ```bash
    gh api graphql -f query='mutation { setIssueFieldValue(input: {issueId: "<ISSUE_NODE_ID>", issueFields: [{fieldId: "IFSS_kgDOAvndIw", singleSelectOptionId: "<OPTION_ID>"}]}) { issue { number } } }'
    ```
+
+## Pull Requests
+
+Pull requests must be linked to their corresponding GitHub issue by including a closing or reference keyword in the PR body (e.g., `Closes #123` or `Refs #123`).
