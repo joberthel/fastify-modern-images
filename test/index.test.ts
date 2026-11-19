@@ -491,3 +491,109 @@ describe('fastifyModernImages unit tests - transforms and encoding', () => {
     expect(blockedReply.header).not.toHaveBeenCalled()
   })
 })
+
+describe('fastifyModernImages unit tests - HEAD requests', () => {
+  type OnRequestHook = (request: any) => Promise<void>
+
+  async function registerHooks(opts = {}): Promise<{ onRequest: OnRequestHook, onSend: OnSendHook }> {
+    let onRequest: OnRequestHook | undefined
+    let onSend: OnSendHook | undefined
+    const fakeFastify = {
+      addHook: vi.fn((name: string, fn: any) => {
+        if (name === 'onRequest') {
+          onRequest = fn
+        }
+        else if (name === 'onSend') {
+          onSend = fn
+        }
+      }),
+    }
+    await fastifyModernImages(fakeFastify as any, opts)
+    return { onRequest: onRequest!, onSend: onSend! }
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSharpInstance.metadata.mockResolvedValue({ hasAlpha: false })
+    mockSharpInstance.toFormat.mockReturnValue({
+      toBuffer: vi.fn().mockResolvedValue(Buffer.from('encoded')),
+    })
+  })
+
+  it('converts matching HEAD request to GET in onRequest and restores HEAD in onSend with empty stream', async () => {
+    const { onRequest, onSend } = await registerHooks()
+    const raw = { url: '/image.jpg', method: 'HEAD' }
+    const request = createRequest({
+      get method() {
+        return raw.method
+      },
+      raw,
+    })
+    const reply = createReply('image/jpeg')
+
+    await onRequest(request)
+    expect(raw.method).toBe('GET')
+
+    const result = await onSend(request, reply, Buffer.from('raw'))
+    expect(raw.method).toBe('HEAD')
+    expect(reply.header).toHaveBeenCalledWith('Content-Type', 'image/webp')
+    expect(reply.header).toHaveBeenCalledWith('Content-Length', Buffer.from('encoded').length)
+    expect(result).toBeInstanceOf(Readable)
+  })
+
+  it('skips non-matching URLs in onRequest and strips body on non-200 or verifyRequest=false HEAD', async () => {
+    const { onRequest, onSend } = await registerHooks({
+      regex: /^\/images\//,
+      verifyRequest: vi.fn().mockResolvedValue(false),
+    })
+
+    const nonMatchingRaw = { url: '/other', method: 'HEAD' }
+    const nonMatchingReq = createRequest({ method: 'HEAD', raw: nonMatchingRaw })
+    await onRequest(nonMatchingReq)
+    expect(nonMatchingRaw.method).toBe('HEAD')
+
+    const raw = { url: '/images/a.jpg', method: 'HEAD' }
+    const request = createRequest({
+      get method() {
+        return raw.method
+      },
+      raw,
+    })
+    await onRequest(request)
+
+    const stream = Readable.from([
+      Buffer.from('chunk'),
+    ])
+    const destroySpy = vi.spyOn(stream, 'destroy')
+    const reply = createReply('image/jpeg')
+
+    const result = await onSend(request, reply, stream)
+    expect(raw.method).toBe('HEAD')
+    expect(destroySpy).toHaveBeenCalled()
+    expect(result).toBeInstanceOf(Readable)
+
+    // Non-200 HEAD with Buffer payload sets Content-Length and returns empty stream
+    const raw2 = { url: '/images/a.jpg', method: 'HEAD' }
+    const request2 = createRequest({
+      get method() {
+        return raw2.method
+      },
+      raw: raw2,
+    })
+    await onRequest(request2)
+    const reply404 = createReply('application/json')
+    reply404.statusCode = 404
+    const result404 = await onSend(request2, reply404, Buffer.from('not found'))
+    expect(reply404.header).toHaveBeenCalledWith('Content-Length', 9)
+    expect(result404).toBeInstanceOf(Readable)
+
+    const nullResult = await onSend(request2, reply404, null)
+    expect(nullResult).toBeNull()
+
+    const reply204 = createReply('image/jpeg')
+    reply204.statusCode = 204
+    const result204 = await onSend(request2, reply204, Buffer.from(''))
+    expect(reply204.header).not.toHaveBeenCalled()
+    expect(result204).toBeInstanceOf(Readable)
+  })
+})

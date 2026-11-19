@@ -140,8 +140,16 @@ describe('response headers', () => {
     expect(res.rawPayload.length).toBe(1024)
   })
 
-  it('skips non-GET requests', async () => {
-    const res = await server.inject({
+  it('aligns HEAD response headers with GET for negotiated images', async () => {
+    const getRes = await server.inject({
+      method: 'GET',
+      url: '/test.jpg',
+      headers: {
+        accept: 'image/webp',
+      },
+    })
+
+    const headRes = await server.inject({
       method: 'HEAD',
       url: '/test.jpg',
       headers: {
@@ -149,8 +157,90 @@ describe('response headers', () => {
       },
     })
 
+    expect(headRes.statusCode).toBe(200)
+    expect(headRes.rawPayload.length).toBe(0)
+    expect(headRes.headers['content-type']).toBe(getRes.headers['content-type'])
+    expect(headRes.headers['content-type']).toBe('image/webp')
+    expect(headRes.headers['content-length']).toBe(getRes.headers['content-length'])
+    expect(headRes.headers.etag).toBe(getRes.headers.etag)
+    expect(headRes.headers.vary).toBe(getRes.headers.vary)
+    expect(headRes.headers['accept-ranges']).toBeUndefined()
+  })
+
+  it('returns 304 for HEAD when If-None-Match matches derived ETag', async () => {
+    const headRes = await server.inject({
+      method: 'HEAD',
+      url: '/test.jpg',
+      headers: {
+        accept: 'image/webp',
+      },
+    })
+
+    const res304 = await server.inject({
+      method: 'HEAD',
+      url: '/test.jpg',
+      headers: {
+        'accept': 'image/webp',
+        'if-none-match': headRes.headers.etag as string,
+      },
+    })
+
+    expect(res304.statusCode).toBe(304)
+    expect(res304.rawPayload.length).toBe(0)
+    expect(res304.headers.etag).toBe(headRes.headers.etag)
+    expect(res304.headers.vary).toBe('Accept')
+  })
+
+  it('aligns HEAD response headers with GET on custom Fastify GET routes', async () => {
+    const customServer = fastify()
+    customServer.register(fastifyModernImages)
+    customServer.get('/custom.jpg', async (_request, reply) => {
+      const { readFile } = await import('node:fs/promises')
+      reply.type('image/jpeg')
+      return readFile(path.join(__dirname, '../example/public/test.jpg'))
+    })
+    await customServer.ready()
+
+    const getRes = await customServer.inject({
+      method: 'GET',
+      url: '/custom.jpg',
+      headers: { accept: 'image/webp' },
+    })
+    const headRes = await customServer.inject({
+      method: 'HEAD',
+      url: '/custom.jpg',
+      headers: { accept: 'image/webp' },
+    })
+
+    expect(headRes.statusCode).toBe(200)
+    expect(headRes.rawPayload.length).toBe(0)
+    expect(headRes.headers['content-type']).toBe('image/webp')
+    expect(headRes.headers['content-length']).toBe(getRes.headers['content-length'])
+    expect(headRes.headers.vary).toBe('Accept')
+
+    await customServer.close()
+  })
+
+  it('skips non-GET/HEAD requests', async () => {
+    const postServer = fastify()
+    postServer.register(fastifyModernImages)
+    postServer.post('/upload.jpg', async (_request, reply) => {
+      reply.type('image/jpeg')
+      return Buffer.from('raw-image')
+    })
+    await postServer.ready()
+
+    const res = await postServer.inject({
+      method: 'POST',
+      url: '/upload.jpg',
+      headers: {
+        accept: 'image/webp',
+      },
+    })
+
     expect(res.statusCode).toBe(200)
     expect(res.headers['content-type']).toBe('image/jpeg')
+    await postServer.close()
   })
 
   it('sets Vary: Accept on early no-format fallback responses', async () => {
