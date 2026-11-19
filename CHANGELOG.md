@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.2](https://github.com/joberthel/fastify-modern-images/compare/fastify-modern-images-v0.8.1...fastify-modern-images-v0.8.2) (2026-11-19)
+
+
+### Bug Fixes
+
+* add onLimitExceeded option and early Content-Length check ([2d08b37](https://github.com/joberthel/fastify-modern-images/commit/2d08b37d8a0a6bc7f42a13e59f47891104cd2e0f)), closes [#91](https://github.com/joberthel/fastify-modern-images/issues/91)
+* preserve alpha channel for transparent background colors ([f434d96](https://github.com/joberthel/fastify-modern-images/commit/f434d96c9da88060b2b00fe3c24f75270421b4b8)), closes [#87](https://github.com/joberthel/fastify-modern-images/issues/87)
+* preserve EXIF auto-orientation when explicit rotation is provided ([65fe136](https://github.com/joberthel/fastify-modern-images/commit/65fe13620e33ef87b64c552c821ffcb213660538)), closes [#86](https://github.com/joberthel/fastify-modern-images/issues/86)
+* re-export public TypeScript types and InputLimitExceededError ([759f0d1](https://github.com/joberthel/fastify-modern-images/commit/759f0d10f7ffa8ca6b690a9b3dfb008974dae0d5)), closes [#95](https://github.com/joberthel/fastify-modern-images/issues/95)
+* set Vary Accept on fallback and non-transformed image responses ([9551f45](https://github.com/joberthel/fastify-modern-images/commit/9551f455ff83b733aecafb30c2af27c62d7d2fe4)), closes [#88](https://github.com/joberthel/fastify-modern-images/issues/88)
+* tighten option types and validate plugin options at startup ([d7cf9c2](https://github.com/joberthel/fastify-modern-images/commit/d7cf9c2c91ccf2c2f1a8edab39d3453bc27ab783)), closes [#98](https://github.com/joberthel/fastify-modern-images/issues/98)
+
 ## [0.8.1](https://github.com/joberthel/fastify-modern-images/compare/fastify-modern-images-v0.8.0...fastify-modern-images-v0.8.1) (2026-11-15)
 
 
