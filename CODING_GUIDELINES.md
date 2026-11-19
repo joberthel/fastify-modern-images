@@ -8,6 +8,11 @@
 
 - Keep unit tests (`*.test.ts`) in the `test/` folder.
 - Keep end-to-end tests (`*.e2e.test.ts`) in the `e2e/` folder.
+- Assert 100% coverage on modified lines for local usage (after running `pnpm test:coverage`):
+
+  ```bash
+  pnpm test:diff-cover
+  ```
 
 ## Commits and Git hygiene
 
