@@ -436,3 +436,79 @@ describe('issue #36: flatten, q=0, and early format check', () => {
     await server.close()
   })
 })
+
+describe('issue #89: prevent JPEG-to-PNG format inflation and size regression', () => {
+  it('does not convert JPEG to PNG for legacy WebKit Accept header and still allows PNG when only PNG is accepted', async () => {
+    const server = fastify()
+    server.register(fastifyModernImages)
+    server.register(fastifyStatic, {
+      root: path.join(__dirname, '../example/public'),
+      prefix: '/',
+    })
+    await server.ready()
+
+    const originalJpeg = await fs.readFile(path.join(__dirname, '../example/public/test.jpg'))
+
+    const legacyRes = await server.inject({
+      method: 'GET',
+      url: '/test.jpg',
+      headers: {
+        accept: 'image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5',
+      },
+    })
+    expect(legacyRes.statusCode).toBe(200)
+    expect(legacyRes.headers['content-type']).not.toBe('image/png')
+    expect(legacyRes.rawPayload.length).toBeLessThanOrEqual(originalJpeg.length)
+
+    const pngOnlyRes = await server.inject({
+      method: 'GET',
+      url: '/test.jpg',
+      headers: {
+        accept: 'image/png',
+      },
+    })
+    expect(pngOnlyRes.statusCode).toBe(200)
+    expect(pngOnlyRes.headers['content-type']).toBe('image/png')
+
+    await server.close()
+  })
+
+  it('returns the original JPEG buffer when untransformed re-encoding would regress size', async () => {
+    const smallJpeg = await sharp({
+      create: {
+        width: 64,
+        height: 64,
+        channels: 3,
+        background: { r: 100, g: 150, b: 200 },
+      },
+    })
+      .jpeg({ quality: 20 })
+      .toBuffer()
+
+    const server = fastify()
+    server.register(fastifyModernImages, {
+      compression: {
+        avif: { enabled: false },
+        webp: { enabled: false },
+      },
+    })
+    server.get('/small.jpg', async (_request, reply) => {
+      return reply.header('Content-Type', 'image/jpeg').send(smallJpeg)
+    })
+    await server.ready()
+
+    const res = await server.inject({
+      method: 'GET',
+      url: '/small.jpg',
+      headers: {
+        accept: 'image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5',
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['content-type']).toBe('image/jpeg')
+    expect(res.rawPayload).toEqual(smallJpeg)
+
+    await server.close()
+  })
+})

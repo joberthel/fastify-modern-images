@@ -116,14 +116,25 @@ export function getBestFormat(
 ): CompressionConfig | undefined {
   const hasAlpha = !flattened && metadata.hasAlpha === true
   const allowsJpegForPng = flattened || isMediaTypeExplicitlyAccepted(accept, 'image/jpeg')
+  const allowsPngForJpeg = !formats.some(
+    item =>
+      item.enabled
+      && item.format !== 'png'
+      && (!hasAlpha || item.alpha)
+      && item.supported(accept)
+      && isMediaTypeAccepted(accept, item.contentType),
+  )
   // Prevent opaque PNGs from converting to lossy JPEG by default when modern
   // formats (avif/webp) are not accepted, unless the caller flattened the image
   // or the client explicitly accepts image/jpeg.
+  // Similarly, prevent JPEG sources from converting to PNG (which inflates file
+  // size) unless no other enabled, supported, and accepted format is available.
   const sorted = formats
     .filter(item =>
       item.enabled
       && (!hasAlpha || item.alpha)
       && (allowsJpegForPng || !(metadata.format === 'png' && item.format === 'jpeg'))
+      && (allowsPngForJpeg || !(metadata.format === 'jpeg' && item.format === 'png'))
       && item.supported(accept),
     )
     .sort((a, b) => {

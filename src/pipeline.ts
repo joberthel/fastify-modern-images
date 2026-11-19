@@ -5,7 +5,7 @@ import type { NormalizedTransformParams } from './validation'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import sharp from 'sharp'
-import { appendVaryHeader, computeDerivedEtag, getBestFormat, isStream, matchesIfNoneMatch } from './negotiation'
+import { appendVaryHeader, computeDerivedEtag, getBestFormat, isMediaTypeAccepted, isStream, matchesIfNoneMatch } from './negotiation'
 import { removeBackground, validateRembgModel } from './providers/rembg'
 import { readStreamWithLimit } from './stream'
 import { isNonEmptyString, normalizeTransformParams, parseQuality } from './validation'
@@ -94,6 +94,8 @@ export type CoalescedPipelineResult
     format: CompressionConfig
     quality: number | undefined
     derivedEtag: string | undefined
+    metadataFormat?: string
+    oriented?: boolean
   }
   | {
     status: 'no-format'
@@ -205,6 +207,47 @@ async function coalesceTransformAndEncode(
       inFlight.delete(key)
     }
   }
+}
+
+function resolveOriginalContentType(reply: FastifyReply, metadataFormat?: string): string {
+  const rawInputType = String(reply.getHeader('Content-Type') ?? '').split(';', 1)[0].trim().toLowerCase()
+  if (rawInputType.length > 0) {
+    return rawInputType
+  }
+  if (metadataFormat === undefined || metadataFormat === '') {
+    return ''
+  }
+  const normalizedFormat = metadataFormat === 'heif'
+    ? 'avif'
+    : metadataFormat
+  return `image/${normalizedFormat}`
+}
+
+function isOriginalFormatAccepted(accept: string, reply: FastifyReply, metadataFormat?: string): boolean {
+  if (accept === '') {
+    return true
+  }
+  const originalContentType = resolveOriginalContentType(reply, metadataFormat)
+  return originalContentType !== '' && isMediaTypeAccepted(accept, originalContentType)
+}
+
+function hasTransformations(
+  request: FastifyRequest<ImageTransformRequest>,
+  params: NormalizedTransformParams,
+  aiModel: string | undefined,
+  oriented: boolean,
+): boolean {
+  return (
+    params.width !== null
+    || params.height !== null
+    || params.rotation !== undefined
+    || params.trim
+    || isNonEmptyString(params.background)
+    || aiModel !== undefined
+    || isNonEmptyString(request.query.quality)
+    || isNonEmptyString(request.query.q)
+    || oriented
+  )
 }
 
 function sendEncodedReply(
@@ -431,6 +474,7 @@ export async function processPayload(
 
       applySharpTransforms(instance, params, options)
       const output = await instance.toFormat(format.format, { ...format.options, quality }).toBuffer()
+      const oriented = metadata.orientation !== undefined && metadata.orientation > 1
 
       return {
         status: 'ok',
@@ -438,6 +482,8 @@ export async function processPayload(
         format,
         quality,
         derivedEtag,
+        metadataFormat: metadata.format,
+        oriented,
       }
     }, inFlight, attachDisconnectListener)
 
@@ -451,7 +497,14 @@ export async function processPayload(
       return inputBuffer
     }
 
-    const { output, format, quality, derivedEtag } = result
+    const { output, format, quality, derivedEtag, metadataFormat, oriented = false } = result
+    if (
+      output.length >= inputLength
+      && !hasTransformations(request, params, aiModel, oriented)
+      && isOriginalFormatAccepted(accept, reply, metadataFormat)
+    ) {
+      return inputBuffer
+    }
     if (derivedEtag !== undefined && matchesIfNoneMatch(request.headers['if-none-match'], derivedEtag)) {
       return sendNotModified(reply, derivedEtag)
     }

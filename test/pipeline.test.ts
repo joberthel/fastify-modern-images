@@ -834,3 +834,274 @@ describe('pipeline - Vary and Cache-Control on fallback paths', () => {
     expect(req.log.error).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('pipeline - size regression fallback', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  function createRegressionReply(contentType = 'image/jpeg') {
+    const headers = new Map<string, unknown>([
+      ['content-type', contentType],
+      ['etag', '"upstream-1"'],
+    ])
+
+    return {
+      code: vi.fn().mockReturnThis(),
+      header: vi.fn((key: string, val: unknown) => {
+        headers.set(key.toLowerCase(), val)
+      }),
+      getHeader: vi.fn((key: string) => headers.get(key.toLowerCase())),
+      removeHeader: vi.fn((key: string) => {
+        headers.delete(key.toLowerCase())
+      }),
+      headers,
+    }
+  }
+
+  it('returns original buffer when output is larger than input, no transform is requested, and original format is accepted', async () => {
+    const options = resolveOptions({})
+    const inputBuffer = Buffer.from('small-jpeg')
+    const largerEncoded = Buffer.from('much-larger-encoded-output')
+
+    sharpMock.mockReturnValueOnce({
+      metadata: vi.fn().mockResolvedValue({
+        width: 100,
+        height: 100,
+        format: 'jpeg',
+        hasAlpha: false,
+      }),
+      autoOrient: vi.fn().mockReturnThis(),
+      rotate: vi.fn().mockReturnThis(),
+      toFormat: vi.fn().mockReturnValue({
+        toBuffer: vi.fn().mockResolvedValue(largerEncoded),
+      }),
+    })
+
+    const reply = createRegressionReply('image/jpeg')
+    const req = {
+      headers: { accept: 'image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5' },
+      query: {},
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+
+    const result = await processPayload(req as never, reply as never, inputBuffer, options)
+
+    expect(result).toBe(inputBuffer)
+    expect(reply.headers.get('content-type')).toBe('image/jpeg')
+    expect(reply.headers.get('etag')).toBe('"upstream-1"')
+    expect(req.log.info).not.toHaveBeenCalled()
+  })
+
+  it('serves encoded output when size increases but a transformation, explicit quality, or EXIF orientation is present', async () => {
+    const options = resolveOptions({})
+    const inputBuffer = Buffer.from('small-jpeg')
+    const largerEncoded = Buffer.from('much-larger-encoded-output')
+
+    for (const testCase of [
+      {
+        query: { width: '50' },
+        orientation: undefined,
+      },
+      {
+        query: { q: '9' },
+        orientation: undefined,
+      },
+      { query: {}, orientation: 6 },
+    ]) {
+      sharpMock.mockReturnValueOnce({
+        metadata: vi.fn().mockResolvedValue({
+          width: 100,
+          height: 100,
+          format: 'jpeg',
+          hasAlpha: false,
+          orientation: testCase.orientation,
+        }),
+        autoOrient: vi.fn().mockReturnThis(),
+        rotate: vi.fn().mockReturnThis(),
+        resize: vi.fn().mockReturnThis(),
+        toFormat: vi.fn().mockReturnValue({
+          toBuffer: vi.fn().mockResolvedValue(largerEncoded),
+        }),
+      })
+
+      const reply = createRegressionReply('image/jpeg')
+      const req = {
+        headers: { accept: 'image/webp,image/jpeg' },
+        query: testCase.query,
+        log: {
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
+        },
+      }
+
+      const result = await processPayload(req as never, reply as never, inputBuffer, options)
+
+      expect(result).toBe(largerEncoded)
+      expect(reply.headers.get('content-type')).toBe('image/webp')
+    }
+  })
+
+  it('serves encoded output when size increases but client does not accept the original format', async () => {
+    const options = resolveOptions({})
+    const inputBuffer = Buffer.from('small-jpeg')
+    const largerEncoded = Buffer.from('much-larger-encoded-output')
+
+    sharpMock.mockReturnValueOnce({
+      metadata: vi.fn().mockResolvedValue({
+        width: 100,
+        height: 100,
+        format: 'jpeg',
+        hasAlpha: false,
+      }),
+      autoOrient: vi.fn().mockReturnThis(),
+      rotate: vi.fn().mockReturnThis(),
+      toFormat: vi.fn().mockReturnValue({
+        toBuffer: vi.fn().mockResolvedValue(largerEncoded),
+      }),
+    })
+
+    const reply = createRegressionReply('image/jpeg')
+    const req = {
+      headers: { accept: 'image/webp' },
+      query: {},
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+
+    const result = await processPayload(req as never, reply as never, inputBuffer, options)
+
+    expect(result).toBe(largerEncoded)
+    expect(reply.headers.get('content-type')).toBe('image/webp')
+  })
+
+  it('falls back to original buffer when Accept header is empty and size increases', async () => {
+    const options = resolveOptions({})
+    const inputBuffer = Buffer.from('small-jpeg')
+    const largerEncoded = Buffer.from('much-larger-encoded-output')
+
+    sharpMock.mockReturnValueOnce({
+      metadata: vi.fn().mockResolvedValue({
+        width: 100,
+        height: 100,
+        format: 'jpeg',
+        hasAlpha: false,
+      }),
+      autoOrient: vi.fn().mockReturnThis(),
+      rotate: vi.fn().mockReturnThis(),
+      toFormat: vi.fn().mockReturnValue({
+        toBuffer: vi.fn().mockResolvedValue(largerEncoded),
+      }),
+    })
+
+    const reply = createRegressionReply('image/jpeg')
+    const req = {
+      headers: {},
+      query: {},
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+
+    const result = await processPayload(req as never, reply as never, inputBuffer, options)
+
+    expect(result).toBe(inputBuffer)
+    expect(reply.headers.get('content-type')).toBe('image/jpeg')
+  })
+
+  it('infers original content-type from metadata format (including heif->avif) or serves encoded when unknown', async () => {
+    const options = resolveOptions({})
+    const inputBuffer = Buffer.from('small-heif')
+    const largerEncoded = Buffer.from('much-larger-encoded-output')
+
+    sharpMock.mockReturnValueOnce({
+      metadata: vi.fn().mockResolvedValue({
+        width: 100,
+        height: 100,
+        format: 'heif',
+        hasAlpha: false,
+      }),
+      autoOrient: vi.fn().mockReturnThis(),
+      rotate: vi.fn().mockReturnThis(),
+      toFormat: vi.fn().mockReturnValue({
+        toBuffer: vi.fn().mockResolvedValue(largerEncoded),
+      }),
+    })
+
+    const replyWithoutContentType = createRegressionReply('')
+    const reqAcceptingAvif = {
+      headers: { accept: 'image/avif,image/webp' },
+      query: {},
+      log: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    }
+
+    const heifResult = await processPayload(reqAcceptingAvif as never, replyWithoutContentType as never, inputBuffer, options)
+    expect(heifResult).toBe(inputBuffer)
+
+    sharpMock.mockReturnValueOnce({
+      metadata: vi.fn().mockResolvedValue({
+        width: 100,
+        height: 100,
+        format: undefined,
+        hasAlpha: false,
+      }),
+      autoOrient: vi.fn().mockReturnThis(),
+      rotate: vi.fn().mockReturnThis(),
+      toFormat: vi.fn().mockReturnValue({
+        toBuffer: vi.fn().mockResolvedValue(largerEncoded),
+      }),
+    })
+
+    const replyUnknownFormat = createRegressionReply('')
+    replyUnknownFormat.headers.delete('content-type')
+    const unknownResult = await processPayload(reqAcceptingAvif as never, replyUnknownFormat as never, inputBuffer, options)
+    expect(unknownResult).toBe(largerEncoded)
+    expect(replyUnknownFormat.headers.get('content-type')).toBe('image/avif')
+
+    sharpMock.mockReturnValueOnce({
+      metadata: vi.fn().mockResolvedValue({
+        width: 100,
+        height: 100,
+        format: 'jpeg',
+        hasAlpha: false,
+      }),
+      autoOrient: vi.fn().mockReturnThis(),
+      rotate: vi.fn().mockReturnThis(),
+      toFormat: vi.fn().mockReturnValue({
+        toBuffer: vi.fn().mockResolvedValue(largerEncoded),
+      }),
+    })
+
+    const replyUndefinedContentType = createRegressionReply('')
+    replyUndefinedContentType.headers.delete('content-type')
+    const jpegFallbackResult = await processPayload(
+      {
+        headers: { accept: 'image/avif,image/jpeg' },
+        query: {},
+        log: {
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
+        },
+      } as never,
+      replyUndefinedContentType as never,
+      inputBuffer,
+      options,
+    )
+    expect(jpegFallbackResult).toBe(inputBuffer)
+  })
+})
