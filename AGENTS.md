@@ -8,6 +8,7 @@ All of the following checks must pass before handing work back:
 
 - `pnpm build`
 - `pnpm test:coverage`
+- `pnpm test:diff-cover`
 - `pnpm test:e2e`
 - `pnpm lint`
 - `pnpm lint:pkg`
